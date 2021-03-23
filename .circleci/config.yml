@@ -15,7 +15,7 @@ references:
     working_directory: ~/pipelinewise
     docker:
       # Main python container
-      - image: circleci/python:3.7.7
+      - image: cimg/python:3.8
         environment:
           TAP_MYSQL_HOST: db_mysql_source
           TAP_MYSQL_PORT: 3306
@@ -87,6 +87,9 @@ jobs:
     steps:
       - checkout
 
+      - setup_remote_docker:
+          docker_layer_caching: true
+
       - run:
           name: 'Install dependencies'
           command: |
@@ -129,23 +132,15 @@ jobs:
           command: |
             . .virtualenvs/pipelinewise/bin/activate
             export PIPELINEWISE_HOME=$PWD
-            mkdir test-reports
-            coverage run -m pytest tests/units -v --junitxml=test-reports/junit.xml
-            coverage report --fail-under=69 || { echo 'Coverage threshold of 69% not met!' ; exit 1; }
-            coverage html -d coverage_html
+            pytest --cov=pipelinewise --cov-fail-under=70 -v tests/units
 
       - run:
           name: 'Run E2E tests'
           command: |
             . .virtualenvs/pipelinewise/bin/activate
             export PIPELINEWISE_HOME=$PWD
-            pytest tests/end_to_end -v
+            pytest -v --workers 3 --tests-per-worker auto tests/end_to_end
           no_output_timeout: 30m
-
-      - store_test_results:
-          path: test-reports
-      - store_artifacts:
-          path: coverage_html
 
   # For documentation deployment. You'll need the following environment vars
   # in your Circle CI settings, otherwise this will not work.
@@ -155,7 +150,7 @@ jobs:
   # GH_TOKEN (the personal Git token with pushes enabled)
   deploy-doc:
     docker:
-      - image: circleci/python:3.7.7
+      - image: cimg/python:3.8
     working_directory: ~/gh_doc_automation
     steps:
       - checkout

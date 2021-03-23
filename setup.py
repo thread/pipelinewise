@@ -45,7 +45,8 @@ setup(name='pipelinewise',
               'python-dotenv==0.15.0',
               'mock==4.0.3',
               'pylint==2.7.2',
-              'unify==0.5'
+              'unify==0.5',
+              'pytest-parallel==0.1'
           ]
       },
       entry_points={
