@@ -40,7 +40,7 @@ class PipelineWise:
 
         self.profiling_mode = args.profiler
         self.profiling_dir = profiling_dir
-        self.enable_fastsync = args.enable_fastsync
+        self.disable_fastsync = args.disable_fastsync
         self.drop_pg_slot = False
         self.args = args
         self.logger = logging.getLogger(__name__)
@@ -200,7 +200,7 @@ class PipelineWise:
                 # Set the "selected" key to False if the actual values don't meet the filter criteria
                 # pylint: disable=too-many-boolean-expressions
                 if (
-                        self.enable_fastsync and
+                        not self.disable_fastsync and
                         (f_selected is None or selected == f_selected) and
                         (f_target_type is None or target_type in f_target_type) and
                         (f_tap_type is None or tap_type in f_tap_type) and
@@ -1156,7 +1156,6 @@ class PipelineWise:
         # sync_tables command always using fastsync
         try:
             with pidfile.PIDFile(self.tap['files']['pidfile']):
-                self.tap_run_log_file = os.path.join(log_dir, f'{target_id}-{tap_id}-{current_time}.fastsync.log')
 
                 # Create parameters as NamedTuples
                 tap_params = TapParams(
@@ -1184,15 +1183,17 @@ class PipelineWise:
                     target_id=target_id
                 )
 
-                if self.enable_fastsync:
-                    self.run_tap_fastsync(tap=tap_params,
-                                        target=target_params,
-                                        transform=transform_params)
-                else:
+                if self.disable_fastsync:
+                    self.tap_run_log_file = os.path.join(log_dir, f'{target_id}-{tap_id}-{current_time}.singer.log')
                     self.run_tap_singer(tap=tap_params,
                                         target=target_params,
                                         transform=transform_params,
                                         stream_buffer_size=stream_buffer_size)
+                else:
+                    self.tap_run_log_file = os.path.join(log_dir, f'{target_id}-{tap_id}-{current_time}.fastsync.log')
+                    self.run_tap_fastsync(tap=tap_params,
+                                          target=target_params,
+                                          transform=transform_params)
 
         except pidfile.AlreadyRunningError:
             self.logger.error('Another instance of the tap is already running.')

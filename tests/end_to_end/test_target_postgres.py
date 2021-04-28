@@ -15,6 +15,7 @@ from .helpers.env import E2EEnv
 DIR = os.path.dirname(__file__)
 TAP_MARIADB_ID = 'mariadb_to_pg'
 TAP_MARIADB_BUFFERED_STREAM_ID = 'mariadb_to_pg_buffered_stream'
+TAP_MARIADB_DISABLE_FASTSYNC_ID = 'mariadb_to_pg_fastsync_disabled'
 TAP_MONGODB_ID = 'mongo_to_pg'
 TAP_POSTGRES_ID = 'postgres_to_pg'
 TAP_S3_CSV_ID = 's3_csv_to_pg'
@@ -145,6 +146,26 @@ class TestTargetPostgres:
         assertions.assert_row_counts_equal(self.run_query_tap_mysql, self.run_query_target_postgres)
         assertions.assert_all_columns_exist(self.run_query_tap_mysql, self.run_query_target_postgres,
                                             mysql_to_postgres.tap_type_to_target_type)
+
+    @pytest.mark.dependency(depends=['import_config'])
+    def test_resync_mariadb_to_pg_with_no_fastsync(self, tap_mariadb_id=TAP_MARIADB_DISABLE_FASTSYNC_ID):
+        """Resync tables from MariaDB to Postgres DWH with fastsync disabled"""
+        # 1. Resync tap with fastsync disabled: only singer should be triggered
+        # This is currently failing because of two possible reasons:
+        #   * row counts don't match because singer based resync doesn't update the state file in place,
+        #     instead it's re-using it from the previous run. Hence, no actual resync
+        #   * metadata columns are not always created
+        assertions.assert_resync_tables_success(tap_mariadb_id, TARGET_ID, disable_fastsync=True)
+        assertions.assert_row_counts_equal(self.run_query_tap_mysql, self.run_query_target_postgres)
+        assertions.assert_all_columns_exist(self.run_query_tap_mysql, self.run_query_target_postgres,
+                                            mysql_to_postgres.tap_type_to_target_type)
+
+        # 2. Run tap with fastsync disabled: only singer should be triggered
+        # assertions.assert_run_tap_success(tap_mariadb_id, TARGET_ID, ['singer'], disable_fastsync=True)
+        # assertions.assert_row_counts_equal(self.run_query_tap_mysql, self.run_query_target_postgres)
+        # assertions.assert_all_columns_exist(self.run_query_tap_mysql, self.run_query_target_postgres,
+        #                                     mysql_to_postgres.tap_type_to_target_type)
+
 
     # pylint: disable=invalid-name
     @pytest.mark.dependency(depends=['import_config'])

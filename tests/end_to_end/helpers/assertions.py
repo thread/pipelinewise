@@ -9,7 +9,7 @@ from . import tasks
 from . import db
 
 
-def assert_run_tap_success(tap, target, sync_engines, profiling=False):
+def assert_run_tap_success(tap, target, sync_engines, profiling=False, disable_fastsync=False):
     """Run a specific tap and make sure that it's using the correct sync engine,
     finished successfully and state file created with the right content"""
 
@@ -17,6 +17,9 @@ def assert_run_tap_success(tap, target, sync_engines, profiling=False):
 
     if profiling:
         command = f'{command} --profiler'
+
+    if disable_fastsync:
+        command = f'{command} --disable_fastsync'
 
     [return_code, stdout, stderr] = tasks.run_command(command)
 
@@ -29,7 +32,7 @@ def assert_run_tap_success(tap, target, sync_engines, profiling=False):
         assert_profiling_stats_files_created(stdout, 'run_tap', sync_engines, tap, target)
 
 
-def assert_resync_tables_success(tap, target, profiling=False):
+def assert_resync_tables_success(tap, target, profiling=False, disable_fastsync=False):
     """Resync a specific tap and make sure that it's using the correct sync engine,
     finished successfully and state file created with the right content"""
 
@@ -38,9 +41,16 @@ def assert_resync_tables_success(tap, target, profiling=False):
     if profiling:
         command = f'{command} --profiler'
 
+    if disable_fastsync:
+        command = f'{command} --disable_fastsync'
+
     [return_code, stdout, stderr] = tasks.run_command(command)
 
-    log_file = tasks.find_run_tap_log_file(stdout, 'fastsync')
+    if disable_fastsync:
+        log_file = tasks.find_run_tap_log_file(stdout, 'singer')
+    else:
+        log_file = tasks.find_run_tap_log_file(stdout, 'fastsync')
+
     assert_command_success(return_code, stdout, stderr, log_file)
     assert_state_file_valid(target, tap, log_file)
 

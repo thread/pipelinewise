@@ -171,10 +171,10 @@ def main():
                              'The stats will be dumped into a folder in .pipelinewise/profiling',
                         action='store_true'
                         )
-    parser.add_argument('--enable_fastsync',
-                        default=True,
+    parser.add_argument('--disable_fastsync',
+                        default=False,
                         required=False,
-                        help='Use fastsync for syncing when possible',
+                        help='Disable fastsync',
                         action='store_true')
 
     args = parser.parse_args()
