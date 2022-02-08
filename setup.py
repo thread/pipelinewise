@@ -39,6 +39,7 @@ setup(name='pipelinewise',
           'psutil==5.8.0',
           'ujson>=4.1,<4.3',
           'dnspython==2.1.*',
+          'pathy[gcs,s3]==0.6.*',
       ],
       extras_require={
           'test': [
