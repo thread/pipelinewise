@@ -79,7 +79,7 @@ class PipelineWise:
         self.venv_dir = venv_dir
         self.extra_log = args.extra_log
         self.pipelinewise_bin = self.venv_dir / 'cli' / 'bin' / 'pipelinewise'
-        self.config_path = self.config_dir /'config.json'
+        self.config_path = self.config_dir / 'config.json'
         self.load_config()
         self.alert_sender = AlertSender(self.config.get('alert_handlers'))
 
@@ -1110,7 +1110,6 @@ class PipelineWise:
         if state is not None:
             with tap.state.open('w', encoding='utf-8') as statefile:
                 statefile.write(state)
-
 
     def run_tap_fastsync(
         self, tap: TapParams, target: TargetParams, transform: TransformParams

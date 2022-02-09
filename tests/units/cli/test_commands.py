@@ -33,7 +33,7 @@ class TestCommands:
                 tmp_file.write('foo')
             assert commands.exists_and_executable(f'{temp_dir}/test.tmp') is False
 
-    @mock.patch('pipelinewise.cli.commands._verify_json_file', mock.MagicMock(return_value=True))
+    @mock.patch('pipelinewise.cli.params._verify_json_file', mock.MagicMock(return_value=True))
     def test_build_tap_command(self):
         """Tests the function that generates tap executable command"""
 
@@ -137,7 +137,7 @@ class TestCommands:
             f'--config .ppw/config.json --catalog .ppw/properties.json --state {state_mock}'
         )
 
-    @mock.patch('pipelinewise.cli.commands._verify_json_file', mock.MagicMock(return_value=True))
+    @mock.patch('pipelinewise.cli.params._verify_json_file', mock.MagicMock(return_value=True))
     def test_build_target_command(self):
         """Tests the function that generates target executable command"""
 
@@ -264,7 +264,7 @@ class TestCommands:
             == 'mbuffer -m 100M -q -l stream_buffer.log.running'
         )
 
-    @mock.patch('pipelinewise.cli.commands._verify_json_file', mock.MagicMock(return_value=True))
+    @mock.patch('pipelinewise.cli.params._verify_json_file', mock.MagicMock(return_value=True))
     def test_build_singer_command(self):
         """Tests the function that generates the full singer singer command
         that connects the required components with linux pipes"""
@@ -497,7 +497,7 @@ class TestCommands:
             '--config .ppw/config.json'
         )
 
-    @mock.patch('pipelinewise.cli.commands._verify_json_file', mock.MagicMock(return_value=True))
+    @mock.patch('pipelinewise.cli.params._verify_json_file', mock.MagicMock(return_value=True))
     def test_build_fastsync_command(self):
         """Tests the function that generates the fastsync command"""
 

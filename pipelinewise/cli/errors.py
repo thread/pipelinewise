@@ -27,3 +27,9 @@ class DuplicateConfigException(Exception):
 
 class InvalidConfigException(Exception):
     """Raised if an invalid config is found"""
+
+
+class RunCommandException(Exception):
+    """
+    Custom exception to raise when run command fails
+    """

@@ -29,7 +29,7 @@ from pathlib import Path
 from pathy import BasePath, FluidPath, Pathy
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-from pipelinewise.cli.commands import TapParams, TargetParams, TransformParams
+from .params import TapParams, TargetParams, TransformParams
 
 from . import tap_properties
 from .errors import InvalidConfigException
