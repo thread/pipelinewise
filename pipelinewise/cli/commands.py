@@ -9,6 +9,8 @@ import time
 
 from dataclasses import dataclass
 from subprocess import PIPE, STDOUT, Popen
+from pathlib import Path
+from typing import cast, Optional
 
 from . import utils
 from .errors import StreamBufferTooLargeException
@@ -22,27 +24,23 @@ MAX_STREAM_BUFFER_SIZE = 2500
 PARAMS_VALIDATION_RETRY_PERIOD_SEC = 2
 PARAMS_VALIDATION_RETRY_TIMES = 3
 
-STATUS_RUNNING = 'running'
-STATUS_FAILED = 'failed'
-STATUS_SUCCESS = 'success'
 
-
-def _verify_json_file(json_file_path: str, file_must_exists: bool, allowed_empty: bool) -> bool:
+def _verify_json_file(json_file_path: Path, file_must_exists: bool, allowed_empty: bool) -> bool:
     """Checking if input file is a valid json or not, in some cases it is allowed to have an empty file,
      or it is allowed file not exists!
     """
     try:
-        with open(json_file_path, 'r', encoding='utf-8') as json_file:
+        with json_file_path.open('r', encoding='utf-8') as json_file:
             json.load(json_file)
     except FileNotFoundError:
         return not file_must_exists
     except json.decoder.JSONDecodeError:
-        if not allowed_empty or os.stat(json_file_path).st_size != 0:
+        if not allowed_empty or json_file_path.stat().st_size != 0:
             return False
     return True
 
 
-def do_json_conf_validation(json_file: str, file_property: dict) -> bool:
+def do_json_conf_validation(json_file: Path, file_property: dict) -> bool:
     """
     Validating a json format config property and retry if it is invalid
     """
@@ -63,11 +61,11 @@ class TapParams:
     """
     tap_id: str
     type: str
-    bin: str
-    python_bin: str
-    config: str
-    properties: str
-    state: str
+    bin: Path
+    python_bin: Path
+    config: Path
+    properties: Path
+    state: Path
 
     def __post_init__(self):
         if not self.config:
@@ -98,9 +96,9 @@ class TargetParams:
     """
     target_id: str
     type: str
-    bin: str
-    python_bin: str
-    config: str
+    bin: Path
+    python_bin: Path
+    config: Path
 
     def __post_init__(self):
         json_file = self.config
@@ -116,9 +114,9 @@ class TargetParams:
 @dataclass
 class TransformParams:
     """TransformParams."""
-    bin: str
-    python_bin: str
-    config: str
+    bin: Path
+    python_bin: Path
+    config: Path
     tap_id: str
     target_id: str
 
@@ -131,7 +129,7 @@ class RunCommandException(Exception):
     pass
 
 
-def exists_and_executable(bin_path: str) -> bool:
+def exists_and_executable(bin_path: Path) -> bool:
     """
     Checks if a given file exists and executable.
     It checks if the file exists and executable using the given
@@ -149,14 +147,14 @@ def exists_and_executable(bin_path: str) -> bool:
 
         try:
             paths = f"{os.environ['PATH']}".split(':')
-            (p for p in paths if os.access(f'{p}/{bin_path}', os.X_OK)).__next__()
+            (p for p in paths if os.access(Path(p, bin_path), os.X_OK)).__next__()
         except StopIteration:
             return False
     return True
 
 
 def build_tap_command(
-    tap: TapParams, profiling_mode: bool = False, profiling_dir: str = None
+    tap: TapParams, profiling_mode: bool = False, profiling_dir: Optional[Path] = None
 ) -> str:
     """
     Builds a command that starts a singer tap connector with the
@@ -177,20 +175,21 @@ def build_tap_command(
     )
 
     state_arg = ''
-    if tap.state and os.path.isfile(tap.state):
+    if tap.state and tap.state.is_file():
         state_arg = f'--state {tap.state}'
 
     tap_command = f'{tap.bin} --config {tap.config} {catalog_argument} {tap.properties} {state_arg}'
 
     if profiling_mode:
-        dump_file = os.path.join(profiling_dir, f'tap_{tap.tap_id}.pstat')
+        profiling_dir = cast(Path, profiling_dir)
+        dump_file = profiling_dir / f'tap_{tap.tap_id}.pstat'
         tap_command = f'{tap.python_bin} -m cProfile -o {dump_file} {tap_command}'
 
     return tap_command
 
 
 def build_target_command(
-    target: TargetParams, profiling_mode: bool = False, profiling_dir: str = None
+    target: TargetParams, profiling_mode: bool = False, profiling_dir: Optional[Path] = None
 ) -> str:
     """
     Builds a command that starts a singer target connector with the
@@ -207,7 +206,8 @@ def build_target_command(
     target_command = f'{target.bin} --config {target.config}'
 
     if profiling_mode:
-        dump_file = os.path.join(profiling_dir, f'target_{target.target_id}.pstat')
+        profiling_dir = cast(Path, profiling_dir)
+        dump_file = profiling_dir / f'target_{target.target_id}.pstat'
         target_command = (
             f'{target.python_bin} -m cProfile -o {dump_file} {target_command}'
         )
@@ -216,7 +216,7 @@ def build_target_command(
 
 
 def build_transformation_command(
-    transform: TransformParams, profiling_mode: bool = False, profiling_dir: str = None
+    transform: TransformParams, profiling_mode: bool = False, profiling_dir: Optional[Path] = None
 ) -> str:
     """
     Builds a command that starts a singer transformation connector
@@ -233,16 +233,14 @@ def build_transformation_command(
     trans_command = None
 
     # Detect if transformation is needed
-    if os.path.isfile(transform.config):
+    if transform.config.is_file():
         trans = utils.load_json(transform.config)
         if 'transformations' in trans and len(trans['transformations']) > 0:
             trans_command = f'{transform.bin} --config {transform.config}'
 
             if profiling_mode:
-                dump_file = os.path.join(
-                    profiling_dir,
-                    f'transformation_{transform.tap_id}_{transform.target_id}.pstat',
-                )
+                profiling_dir = cast(Path, profiling_dir)
+                dump_file = profiling_dir / f'transformation_{transform.tap_id}_{transform.target_id}.pstat'
 
                 trans_command = (
                     f'{transform.python_bin} -m cProfile -o {dump_file} {trans_command}'
@@ -253,7 +251,7 @@ def build_transformation_command(
 
 def build_stream_buffer_command(
     buffer_size: int = 0,
-    log_file: str = None,
+    log_file: Optional[Path] = None,
     stream_buffer_bin: str = DEFAULT_STREAM_BUFFER_BIN,
 ) -> str:
     """
@@ -290,7 +288,7 @@ def build_stream_buffer_command(
 
         # Log status to external file instead of stderr if log_file defined
         if log_file:
-            log_file_stats = log_file_with_status(log_file, STATUS_RUNNING)
+            log_file_stats = utils.log_file_with_status(log_file, utils.STATUS_RUNNING)
             buffer_command = f'{buffer_command} -q -l {log_file_stats}'
 
     return buffer_command
@@ -301,9 +299,9 @@ def build_singer_command(
     target: TargetParams,
     transform: TransformParams,
     stream_buffer_size: int = 0,
-    stream_buffer_log_file: str = None,
+    stream_buffer_log_file: Optional[Path] = None,
     profiling_mode: bool = False,
-    profiling_dir: str = None,
+    profiling_dir: Optional[Path] = None,
 ) -> str:
     """
     Builds a command that starts a full singer command with tap,
@@ -359,11 +357,11 @@ def build_fastsync_command(
     tap: TapParams,
     target: TargetParams,
     transform: TransformParams,
-    venv_dir: str,
-    temp_dir: str,
+    venv_dir: Path,
+    temp_dir: Path,
     tables: str = None,
     profiling_mode: bool = False,
-    profiling_dir: str = None,
+    profiling_dir: Optional[Path] = None,
     drop_pg_slot: bool = False,
 ) -> str:
     """
@@ -399,7 +397,7 @@ def build_fastsync_command(
                     f'--target {target.config}',
                     f'--temp_dir {temp_dir}',
                     f'--transform {transform.config}'
-                    if transform.config and os.path.isfile(transform.config)
+                    if transform.config and transform.config.is_file()
                     else '',
                     f'--tables {tables}' if tables else '',
                     '--drop_pg_slot' if drop_pg_slot else '',
@@ -411,7 +409,8 @@ def build_fastsync_command(
     command = f'{fastsync_bin} {command_args}'
 
     if profiling_mode:
-        dump_file = os.path.join(profiling_dir, f'fastsync_{tap.tap_id}_{target.target_id}.pstat')
+        profiling_dir = cast(Path, profiling_dir)
+        dump_file = profiling_dir / f'fastsync_{tap.tap_id}_{target.target_id}.pstat'
         command = f'{ppw_python_bin} -m cProfile -o {dump_file} {command}'
 
     LOGGER.debug('FastSync command: %s', command)
@@ -419,23 +418,8 @@ def build_fastsync_command(
     return command
 
 
-def log_file_with_status(log_file: str, status: str) -> str:
-    """
-    Adds an extension to a log file that represents the
-    actual status of the tap
-
-    Args:
-        log_file: log file path without status extension
-        status: a string that will be appended to the end of log file
-
-    Returns:
-        string of log file path with status extension
-    """
-    return f'{log_file}.{status}'
-
-
 # pylint: disable=too-many-locals
-def run_command(command: str, log_file: str = None, line_callback: callable = None):
+def run_command(command: str, log_file: Optional[Path] = None, line_callback: callable = None):
     """
     Runs a shell command with or without log file with STDOUT and STDERR
 
@@ -453,16 +437,19 @@ def run_command(command: str, log_file: str = None, line_callback: callable = No
         LOGGER.info('Writing output into %s', log_file)
 
         # Create log dir if not exists
-        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        log_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Status embedded in the log file name
-        log_file_running = log_file_with_status(log_file, STATUS_RUNNING)
-        log_file_failed = log_file_with_status(log_file, STATUS_FAILED)
-        log_file_success = log_file_with_status(log_file, STATUS_SUCCESS)
+        log_file_running = utils.log_file_with_status(log_file, utils.STATUS_RUNNING)
+        log_file_failed = utils.log_file_with_status(log_file, utils.STATUS_FAILED)
+        log_file_success = utils.log_file_with_status(log_file, utils.STATUS_SUCCESS)
+
+        # Create running log file to block any other processes.
+        log_file_running.touch()
 
         # Start command
         with Popen(shlex.split(piped_command), stdout=PIPE, stderr=STDOUT) as proc:
-            with open(log_file_running, 'a+', encoding='utf-8') as logfile:
+            with log_file_running.open('a+', encoding='utf-8') as logfile:
                 stdout = ''
                 while True:
                     line = proc.stdout.readline()
@@ -482,7 +469,7 @@ def run_command(command: str, log_file: str = None, line_callback: callable = No
         proc_rc = proc.poll()
         if proc_rc != 0:
             # Add failed status to the log file name
-            os.rename(log_file_running, log_file_failed)
+            log_file_running.rename(log_file_failed)
 
             # Raise run command exception
             errors = ''.join(utils.find_errors_in_log_file(log_file_failed))
@@ -493,7 +480,7 @@ def run_command(command: str, log_file: str = None, line_callback: callable = No
             )
 
         # Add success status to the log file name
-        os.rename(log_file_running, log_file_success)
+        log_file_running.rename(log_file_success)
 
         return [proc_rc, stdout, None]
 

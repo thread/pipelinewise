@@ -1,5 +1,5 @@
 import argparse
-import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -9,7 +9,7 @@ from unittest import TestCase, mock
 from pipelinewise.fastsync.commons import utils
 from pipelinewise.fastsync.commons.utils import NotSelectedTableException
 
-RESOURCES_DIR = '{}/resources'.format(os.path.dirname(__file__))
+RESOURCES_DIR = Path(__file__).parent / 'resources'
 
 
 # pylint: disable=missing-function-docstring,no-self-use,invalid-name,too-few-public-methods
@@ -111,12 +111,8 @@ class TestFastSyncUtils(TestCase):
     def test_get_tables_from_properties(self):
         """Test getting selected tables from tap properties JSON"""
         # Load MySQL and Postgres properties JSON
-        mysql_properties = utils.load_json(
-            '{}/properties_mysql.json'.format(RESOURCES_DIR)
-        )
-        postgres_properties = utils.load_json(
-            '{}/properties_postgres.json'.format(RESOURCES_DIR)
-        )
+        mysql_properties = utils.load_json(RESOURCES_DIR / 'properties_mysql.json')
+        postgres_properties = utils.load_json(RESOURCES_DIR / 'properties_postgres.json')
 
         # Get list of selected tables
         # MySQL and Postgres schemas defined at different keys. get_tables_from_properties function
@@ -134,7 +130,7 @@ class TestFastSyncUtils(TestCase):
         assert postgres_tables == {'public.city', 'public.country'}
 
     def test_get_tables_from_properties_for_s3_csv(self):
-        properties = utils.load_json('{}/properties_s3_csv.json'.format(RESOURCES_DIR))
+        properties = utils.load_json(RESOURCES_DIR / 'properties_s3_csv.json')
 
         s3_csv_tables = utils.get_tables_from_properties(properties)
 
@@ -148,9 +144,7 @@ class TestFastSyncUtils(TestCase):
     def test_get_bookmark_for_table_mysql(self):
         """Test bookmark extractors for MySQL taps"""
         # Load MySQL and Postgres properties JSON
-        mysql_properties = utils.load_json(
-            '{}/properties_mysql.json'.format(RESOURCES_DIR)
-        )
+        mysql_properties = utils.load_json(RESOURCES_DIR / 'properties_mysql.json')
 
         # MySQL: mysql_source_db.order is LOG_BASED
         assert utils.get_bookmark_for_table(
@@ -177,9 +171,7 @@ class TestFastSyncUtils(TestCase):
     def test_get_bookmark_for_table_postgresl(self):
         """Test bookmark extractors for Postgres taps"""
         # Load Postgres properties JSON
-        postgres_properties = utils.load_json(
-            '{}/properties_postgres.json'.format(RESOURCES_DIR)
-        )
+        postgres_properties = utils.load_json(RESOURCES_DIR / 'properties_postgres.json')
 
         # Postgres: public.countrylanguage is LOG_BASED
         assert utils.get_bookmark_for_table(
@@ -208,7 +200,7 @@ class TestFastSyncUtils(TestCase):
     def test_get_bookmark_for_table_tap_s3_csv(self):
         """Test bookmark extractors for S3 CSV taps"""
         # Load properties JSON
-        properties = utils.load_json('{}/properties_s3_csv.json'.format(RESOURCES_DIR))
+        properties = utils.load_json(RESOURCES_DIR / 'properties_s3_csv.json')
 
         # applications is INCREMENTAL
         assert utils.get_bookmark_for_table(

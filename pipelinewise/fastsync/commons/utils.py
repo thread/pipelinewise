@@ -1,11 +1,11 @@
 import argparse
 import json
 import multiprocessing
-import os
 import logging
 import datetime
 
-from typing import Dict
+from typing import Any, Dict, List, Optional, Union
+from pathlib import Path
 from pipelinewise.cli.utils import generate_random_string
 
 LOGGER = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class NotSelectedTableException(Exception):
 
 
 # pylint: disable=missing-function-docstring
-def get_cpu_cores():
+def get_cpu_cores() -> int:
     """Get CPU cores for multiprocessing"""
     try:
         return multiprocessing.cpu_count()
@@ -35,24 +35,24 @@ def get_cpu_cores():
         return 1
 
 
-def load_json(path):
-    with open(path, encoding='utf-8') as fil:
+def load_json(path: Path) -> Any:
+    with path.open('r', encoding='utf-8') as fil:
         return json.load(fil)
 
 
-def save_dict_to_json(path, data):
+def save_dict_to_json(path: Path, data: Any) -> None:
     LOGGER.info('Saving new state file to %s', path)
-    with open(path, 'w', encoding='utf-8') as fil:
+    with path.open('w', encoding='utf-8') as fil:
         fil.write(json.dumps(data))
 
 
-def check_config(config, required_keys):
+def check_config(config: Dict, required_keys: List[str]) -> None:
     missing_keys = [key for key in required_keys if key not in config]
     if missing_keys:
         raise Exception('Config is missing required keys: {}'.format(missing_keys))
 
 
-def tablename_to_dict(table, separator='.'):
+def tablename_to_dict(table: str, separator: str = '.') -> Dict[str, str]:
     """Derive catalog, schema and table names from fully qualified table names"""
     catalog_name = None
     schema_name = None
@@ -107,7 +107,7 @@ def get_tables_from_properties(properties: Dict) -> set:
     return tables
 
 
-def get_bookmark_for_table(table, properties, db_engine, dbname=None):
+def get_bookmark_for_table(table: str, properties: Dict, db_engine: Any, dbname: Optional[str] = None) -> Dict:
     """Get actual bookmark for a specific table used for LOG_BASED or INCREMENTAL
     replications
     """
@@ -156,7 +156,7 @@ def get_bookmark_for_table(table, properties, db_engine, dbname=None):
     return bookmark
 
 
-def get_target_schema(target_config, table):
+def get_target_schema(target_config: Dict, table: str) -> str:
     """Target schema name can be defined in multiple ways:
 
     1: 'default_target_schema' key  : Target schema is the same for every incoming stream if
@@ -193,7 +193,7 @@ def get_target_schema(target_config, table):
 
 
 # pylint: disable=invalid-name
-def get_target_schemas(target_config, tables):
+def get_target_schemas(target_config: Dict, tables: List[str]) -> List[Dict[str, None]]:
     """Get list of target schemas"""
     target_schemas = []
     for trans in tables:
@@ -203,7 +203,7 @@ def get_target_schemas(target_config, tables):
 
 
 # pylint: disable=invalid-name
-def get_grantees(target_config, table):
+def get_grantees(target_config: Dict, table: str) -> Union[List[str], Dict[str, List[str]]]:
     """Grantees can be defined in multiple ways:
 
     1: 'default_target_schema_select_permissions' key  : USAGE and SELECT privileges will be granted on every table to
@@ -268,7 +268,7 @@ def grant_privilege(schema, grantees, grant_method, to_group=False):
         grant_privilege(schema, groups, grant_method, to_group=True)
 
 
-def save_state_file(path, table, bookmark, dbname=None):
+def save_state_file(path: Path, table: str, bookmark: Dict, dbname: Optional[str] = None) -> None:
     table_dict = tablename_to_dict(table)
     if dbname:
         stream_id = '{}-{}-{}'.format(
@@ -287,7 +287,7 @@ def save_state_file(path, table, bookmark, dbname=None):
 
     # Load the current state file
     state = {}
-    if os.path.exists(path):
+    if path.is_file():
         state = load_json(path)
 
     # Find the current table position
@@ -319,14 +319,14 @@ def parse_args(required_config_keys: Dict) -> argparse.Namespace:
     we will automatically load and parse the JSON file.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--tap', help='Tap Config file', required=True)
-    parser.add_argument('--state', help='State file')
-    parser.add_argument('--properties', help='Properties file')
-    parser.add_argument('--target', help='Target Config file', required=True)
-    parser.add_argument('--transform', help='Transformations Config file')
+    parser.add_argument('--tap', type=Path, help='Tap Config file', required=True)
+    parser.add_argument('--state', type=Path, help='State file')
+    parser.add_argument('--properties', type=Path, help='Properties file')
+    parser.add_argument('--target', type=Path, help='Target Config file', required=True)
+    parser.add_argument('--transform', type=Path, help='Transformations Config file')
     parser.add_argument('--tables', help='Sync only specific tables')
     parser.add_argument(
-        '--temp_dir', help='Temporary directory required for CSV exports'
+        '--temp_dir', type=Path, help='Temporary directory required for CSV exports'
     )
     parser.add_argument(
         '--drop_pg_slot',
@@ -367,7 +367,7 @@ def parse_args(required_config_keys: Dict) -> argparse.Namespace:
         args.tables = all_selected_tables
 
     if not args.temp_dir:
-        args.temp_dir = os.path.realpath('.')
+        args.temp_dir = Path('.')
 
     check_config(args.tap, required_config_keys['tap'])
     check_config(args.target, required_config_keys['target'])
@@ -389,7 +389,7 @@ def retry_pattern():
     )
 
 
-def log_backoff_attempt(details):
+def log_backoff_attempt(details: Dict) -> None:
     LOGGER.error(
         'Error detected communicating with Amazon, triggering backoff: %s try',
         details.get('tries'),
