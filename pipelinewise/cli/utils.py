@@ -2,7 +2,6 @@
 PipelineWise CLI - Utilities
 """
 import errno
-import glob
 import json
 import logging
 import os
@@ -25,11 +24,18 @@ from ansible.parsing.dataloader import DataLoader
 from ansible.parsing.vault import VaultLib, get_file_vault_secret, is_encrypted_file
 from ansible.parsing.yaml.loader import AnsibleLoader
 from ansible.parsing.yaml.objects import AnsibleMapping, AnsibleVaultEncryptedUnicode
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from . import tap_properties
 from .errors import InvalidConfigException
 
 LOGGER = logging.getLogger(__name__)
+
+STATUS_RUNNING = 'running'
+STATUS_FAILED = 'failed'
+STATUS_SUCCESS = 'success'
+STATUS_TERMINATED = 'terminated'
 
 
 class AnsibleJSONEncoder(json.JSONEncoder):
@@ -41,7 +47,7 @@ class AnsibleJSONEncoder(json.JSONEncoder):
     """
 
     # pylint: disable=method-hidden,assignment-from-no-return
-    def default(self, o):
+    def default(self, o: Any) -> Any:
         if isinstance(o, AnsibleVaultEncryptedUnicode):
             # vault object - serialise the decrypted value as a string
             value = str(o)
@@ -51,13 +57,15 @@ class AnsibleJSONEncoder(json.JSONEncoder):
         elif isinstance(o, (date, datetime)):
             # date object
             value = o.isoformat()
+        elif isinstance(o, Path):
+            value = str(o)
         else:
             # use default encoder
             value = super().default(o)
         return value
 
 
-def is_json(stringss):
+def is_json(stringss: str) -> bool:
     """
     Detects if a string is a valid json or not
     """
@@ -68,13 +76,13 @@ def is_json(stringss):
     return True
 
 
-def is_json_file(path):
+def is_json_file(path: Path) -> bool:
     """
     Detects if a file is a valid json file or not
     """
     try:
-        if os.path.isfile(path):
-            with open(path, encoding='utf-8') as jsonfile:
+        if path.is_file():
+            with path.open(encoding='utf-8') as jsonfile:
                 if json.load(jsonfile):
                     return True
         return False
@@ -82,14 +90,14 @@ def is_json_file(path):
         return False
 
 
-def load_json(path):
+def load_json(path: Path) -> Optional[Any]:
     """
     Deserialize JSON file to python object
     """
     try:
         LOGGER.debug('Parsing file at %s', path)
-        if os.path.isfile(path):
-            with open(path, encoding='utf-8') as jsonfile:
+        if path.is_file():
+            with path.open(encoding='utf-8') as jsonfile:
                 return json.load(jsonfile)
         else:
             LOGGER.debug('No file at %s', path)
@@ -109,21 +117,21 @@ def is_state_message(line: str) -> bool:
         return False
 
 
-def save_json(data, path):
+def save_json(data: Any, path: Path) -> None:
     """
     Serializes and saves any data structure to JSON files
     """
     try:
         LOGGER.debug('Saving JSON %s', path)
-        with open(path, 'w', encoding='utf-8') as jsonfile:
-            return json.dump(
+        with path.open('w', encoding='utf-8') as jsonfile:
+            json.dump(
                 data, jsonfile, cls=AnsibleJSONEncoder, indent=4, sort_keys=True
             )
     except Exception as exc:
         raise Exception(f'Cannot save JSON {path} {exc}') from exc
 
 
-def is_yaml(strings):
+def is_yaml(strings: str) -> bool:
     """
     Detects if a string is a valid yaml or not
     """
@@ -134,13 +142,13 @@ def is_yaml(strings):
     return True
 
 
-def is_yaml_file(path):
+def is_yaml_file(path: Path) -> bool:
     """
     Detects if a file is a valid yaml file or not
     """
     try:
-        if os.path.isfile(path):
-            with open(path, encoding='utf-8') as yamlfile:
+        if path.is_file():
+            with path.open(encoding='utf-8') as yamlfile:
                 if yaml.safe_load(yamlfile):
                     return True
         return False
@@ -148,7 +156,7 @@ def is_yaml_file(path):
         return False
 
 
-def get_tap_target_names(yaml_dir):
+def get_tap_target_names(yaml_dir: Path) -> Tuple[Set[Path], Set[Path]]:
     """Retrieves names of taps and targets inside yaml_dir.
 
     Args:
@@ -158,19 +166,17 @@ def get_tap_target_names(yaml_dir):
         (tap_yamls, target_yamls): tap_yamls is a list of names inside yaml_dir with "tap_*.y(a)ml" pattern.
                                    target_yamls is a list of names inside yaml_dir with "target_*.y(a)ml" pattern.
     """
-    yamls = [
-        f
-        for f in os.listdir(yaml_dir)
-        if os.path.isfile(os.path.join(yaml_dir, f))
-        and (f.endswith('.yml') or f.endswith('.yaml'))
-    ]
-    target_yamls = set(filter(lambda y: y.startswith('target_'), yamls))
-    tap_yamls = set(filter(lambda y: y.startswith('tap_'), yamls))
+    yamls = []
+    for extension in ('*.yml', '*.yaml'):
+        yamls.extend([yaml_file.name for yaml_file in yaml_dir.glob(extension) if yaml_file.is_file()])
+
+    target_yamls = {file for file in yamls if file.startswith('target_')}
+    tap_yamls = {file for file in yamls if file.startswith('tap_')}
 
     return tap_yamls, target_yamls
 
 
-def load_yaml(yaml_file, vault_secret=None):
+def load_yaml(yaml_file: Path, vault_secret: Optional[Path] = None) -> Dict:
     """
     Load a YAML file into a python dictionary.
 
@@ -187,8 +193,8 @@ def load_yaml(yaml_file, vault_secret=None):
         vault.secrets = [('default', secret_file)]
 
     data = None
-    if os.path.isfile(yaml_file):
-        with open(yaml_file, 'r', encoding='utf-8') as stream:
+    if yaml_file.is_file():
+        with yaml_file.open('r', encoding='utf-8') as stream:
             # Render environment variables using jinja templates
             contents = stream.read()
             template = Template(contents)
@@ -220,7 +226,7 @@ def load_yaml(yaml_file, vault_secret=None):
     return data
 
 
-def vault_encrypt(plaintext, secret):
+def vault_encrypt(plaintext: str, secret: Path) -> bytes:
     """
     Vault encrypt a piece of data.
     """
@@ -236,12 +242,10 @@ def vault_encrypt(plaintext, secret):
         sys.exit(1)
 
 
-def vault_format_ciphertext_yaml(b_ciphertext, indent=None, name=None):
+def vault_format_ciphertext_yaml(b_ciphertext: bytes, indent: int = 10, name: Optional[str] = None) -> str:
     """
     Format a ciphertext to YAML compatible string
     """
-    indent = indent or 10
-
     block_format_var_name = ''
     if name:
         block_format_var_name = '%s: ' % name
@@ -258,25 +262,26 @@ def vault_format_ciphertext_yaml(b_ciphertext, indent=None, name=None):
     return yaml_ciphertext
 
 
-def load_schema(name):
+def load_schema(name: str) -> Dict:
     """
     Load a json schema
     """
-    path = f'{os.path.dirname(__file__)}/schemas/{name}.json'
+    path = Path(__file__).parent / 'schemas' / f'{name}.json'
     schema = load_json(path)
 
     if not schema:
         LOGGER.critical('Cannot load schema at %s', path)
         sys.exit(1)
 
+    assert isinstance(schema, dict), 'File does not contain a schema.'
     return schema
 
 
-def get_sample_file_paths():
+def get_sample_file_paths() -> List[Path]:
     """
     Get list of every available sample files (YAML, etc.) with absolute paths
     """
-    samples_dir = os.path.join(os.path.dirname(__file__), 'samples')
+    samples_dir = Path(__file__).parent / 'samples'
     return search_files(
         samples_dir, patterns=['config.yml', '*.yml.sample', 'README.md'], abs_path=True
     )
@@ -294,11 +299,11 @@ def validate(instance, schema):
         raise InvalidConfigException(f'json object doesn\'t match schema {schema}') from ex
 
 
-def delete_empty_keys(dic):
+def delete_empty_keys(dictionary: Dict) -> Dict:
     """
     Deleting every key from a dictionary where the values are empty
     """
-    return {k: v for k, v in dic.items() if v is not None}
+    return {k: v for k, v in dictionary.items() if v is not None}
 
 
 def delete_keys_from_dict(dic, keys):
@@ -317,13 +322,13 @@ def delete_keys_from_dict(dic, keys):
     }
 
 
-def silentremove(path):
+def silentremove(path: Path) -> None:
     """
     Deleting file with no error message if the file not exists
     """
     LOGGER.debug('Removing file at %s', path)
     try:
-        os.remove(path)
+        path.unlink()
     except OSError as exc:
 
         # errno.ENOENT = no such file or directory
@@ -331,30 +336,29 @@ def silentremove(path):
             raise
 
 
-def search_files(search_dir, patterns=None, sort=False, abs_path=False):
+def search_files(
+    search_dir: Path, patterns: Optional[List[str]] = None, sort: bool = False, abs_path: bool = False
+) -> List[Path]:
     """
     Searching files in a specific directory that match a pattern
     """
     if patterns is None:
         patterns = ['*']
-    files = []
-    if os.path.isdir(search_dir):
+
+    if search_dir.is_dir():
         # Search files and sort if required
         p_files = []
         for pattern in patterns:
             p_files.extend(
-                filter(os.path.isfile, glob.glob(os.path.join(search_dir, pattern)))
+                [file for file in search_dir.glob(pattern) if file.is_file()]
             )
         if sort:
-            p_files.sort(key=os.path.getmtime, reverse=True)
+            p_files.sort(key=lambda x: x.lstat().st_mtime, reverse=True)
 
-        # Cut the whole paths, we only need the filenames
-        files = list(map(lambda x: os.path.basename(x) if not abs_path else x, p_files))
-
-    return files
+    return [path if not abs_path else path.absolute() for path in p_files]
 
 
-def extract_log_attributes(log_file):
+def extract_log_attributes(log_file: Path) -> Dict[str, Any]:
     """
     Extracting common properties from a log file name
     """
@@ -367,7 +371,7 @@ def extract_log_attributes(log_file):
 
     try:
         # Extract attributes from log file name
-        log_attr = re.search(r'(.*)-(.*)-(.*)\.(.*)\.log\.(.*)', log_file)
+        log_attr = re.search(r'(.*)-(.*)-(.*)\.(.*)\.log\.(.*)', str(log_file))
         target_id = log_attr.group(1)
         tap_id = log_attr.group(2)
         timestamp = datetime.strptime(log_attr.group(3), '%Y%m%d_%H%M%S').isoformat()
@@ -389,7 +393,7 @@ def extract_log_attributes(log_file):
     }
 
 
-def get_tap_property(tap, property_key, temp_dir=None):
+def get_tap_property(tap: str, property_key: str, temp_dir: Optional[Path] = None) -> Any:
     """
     Get a tap specific property value
     """
@@ -399,7 +403,7 @@ def get_tap_property(tap, property_key, temp_dir=None):
     return tap_props.get(property_key)
 
 
-def get_tap_property_by_tap_type(tap_type, property_key):
+def get_tap_property_by_tap_type(tap_type: str, property_key: str) -> Any:
     """
     Get a tap specific property value by a tap type.
 
@@ -412,14 +416,14 @@ def get_tap_property_by_tap_type(tap_type, property_key):
     return tap_props.get(property_key)
 
 
-def get_tap_extra_config_keys(tap, temp_dir=None):
+def get_tap_extra_config_keys(tap: str, temp_dir: Optional[Path] = None) -> Any:
     """
     Get tap extra config property
     """
     return get_tap_property(tap, 'tap_config_extras', temp_dir)
 
 
-def get_tap_stream_id(tap, database_name, schema_name, table_name):
+def get_tap_stream_id(tap: str, database_name: str, schema_name: str, table_name: str) -> str:
     """
     Generate tap_stream_id in the same format as a specific
     tap generating it. They are not consistent.
@@ -436,7 +440,7 @@ def get_tap_stream_id(tap, database_name, schema_name, table_name):
     )
 
 
-def get_tap_stream_name(tap, database_name, schema_name, table_name):
+def get_tap_stream_name(tap: str, database_name: str, schema_name: str, table_name: str) -> str:
     """
     Generate tap_stream_name in the same format as a specific
     tap generating it. They are not consistent.
@@ -453,14 +457,14 @@ def get_tap_stream_name(tap, database_name, schema_name, table_name):
     )
 
 
-def get_tap_default_replication_method(tap):
+def get_tap_default_replication_method(tap: str) -> str:
     """
     Get the default replication method for a tap
     """
     return get_tap_property(tap, 'default_replication_method')
 
 
-def get_fastsync_bin(venv_dir, tap_type, target_type):
+def get_fastsync_bin(venv_dir: Path, tap_type: str, target_type: str) -> Path:
     """
     Get the absolute path of a fastsync executable
     """
@@ -468,10 +472,10 @@ def get_fastsync_bin(venv_dir, tap_type, target_type):
     target = target_type.replace('target-', '')
     fastsync_name = f'{source}-to-{target}'
 
-    return os.path.join(venv_dir, 'pipelinewise', 'bin', fastsync_name)
+    return venv_dir / 'pipelinewise' / 'bin' / fastsync_name
 
 
-def get_pipelinewise_python_bin(venv_dir: str) -> str:
+def get_pipelinewise_python_bin(venv_dir: Path) -> str:
     """
     Get the absolute path of a PPW python executable
     Args:
@@ -479,20 +483,23 @@ def get_pipelinewise_python_bin(venv_dir: str) -> str:
 
     Returns: path to python executable
     """
-    return os.path.join(venv_dir, 'pipelinewise', 'bin', 'python')
+    return venv_dir / 'pipelinewise' / 'bin' / 'python'
 
 
 # pylint: disable=redefined-builtin
-def create_temp_file(suffix=None, prefix=None, dir=None, text=None):
+def create_temp_file(
+    suffix: Optional[str] = None, prefix: Optional[str] = None, dir: Optional[Path] = None, text: Optional[str] = None
+) -> Path:
     """
     Create temp file with parent directories if not exists
     """
     if dir:
-        os.makedirs(dir, exist_ok=True)
-    return tempfile.mkstemp(suffix, prefix, dir, text)
+        dir.mkdir(parents=True, exist_ok=True)
+    _, temp_file = tempfile.mkstemp(suffix, prefix, dir, text)
+    return Path(temp_file)
 
 
-def find_errors_in_log_file(file, max_errors=10, error_pattern=None):
+def find_errors_in_log_file(file: Path, max_errors: int = 10, error_pattern: str = None) -> List[str]:
     """
     Find error lines in a log file
 
@@ -525,8 +532,8 @@ def find_errors_in_log_file(file, max_errors=10, error_pattern=None):
         error_pattern = re.compile(known_error_patterns)
 
     errors = []
-    if file and os.path.isfile(file):
-        with open(file, encoding='utf-8') as file_object:
+    if file and file.is_file():
+        with file.open(encoding='utf-8') as file_object:
             for line in file_object:
                 if len(re.findall(error_pattern, line)) > 0:
                     errors.append(line)
@@ -556,3 +563,18 @@ def generate_random_string(length: int = 8) -> str:
     return ''.join(
         secrets.choice(string.ascii_uppercase + string.digits) for _ in range(length)
     )
+
+
+def log_file_with_status(log_file: Path, status: str) -> Path:
+    """
+    Adds an extension to a log file that represents the
+    actual status of the tap
+
+    Args:
+        log_file: log file path without status extension
+        status: a string that will be appended to the end of log file
+
+    Returns:
+        Path object pointing to log file with status extension
+    """
+    return log_file.with_suffix(log_file.suffix + '.' + status)

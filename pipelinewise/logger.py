@@ -12,16 +12,16 @@ class Logger:
     def __init__(self, debug: bool = False) -> None:
         # Use custom logging configuration if LOGGING_CONF_FILE env var defined
         if 'LOGGING_CONF_FILE' in os.environ and os.environ['LOGGING_CONF_FILE']:
-            path = os.environ['LOGGING_CONF_FILE']
+            path = Path(os.environ['LOGGING_CONF_FILE'])
         # Use the the embedded logging_debug.conf config if PipelineWise started in debug mode
         elif debug:
-            path = os.path.join(Path(__file__).parent, 'logging_debug.conf')
-            os.environ['LOGGING_CONF_FILE'] = path
+            path = Path(__file__).parent / 'logging_debug.conf'
+            os.environ['LOGGING_CONF_FILE'] = str(path)
         # Use the default logging.conf otherwise
         else:
             # Get path to logging config file and set the LOGGING_CONF_FILE env variable
-            path = os.path.join(Path(__file__).parent, 'logging.conf')
-            os.environ['LOGGING_CONF_FILE'] = path
+            path = Path(__file__).parent / 'logging.conf'
+            os.environ['LOGGING_CONF_FILE'] = str(path)
 
         # Use the path to define the logging config, and don't disable any pre-existing loggers
         fileConfig(path, disable_existing_loggers=False)

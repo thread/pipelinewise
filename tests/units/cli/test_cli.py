@@ -19,12 +19,12 @@ from pipelinewise.cli.config import Config
 from pipelinewise.cli.pipelinewise import PipelineWise
 from pipelinewise.cli.errors import DuplicateConfigException, InvalidConfigException, InvalidTransformationException
 
-RESOURCES_DIR = '{}/resources'.format(os.path.dirname(__file__))
-CONFIG_DIR = '{}/sample_json_config'.format(RESOURCES_DIR)
-VIRTUALENVS_DIR = './virtualenvs-dummy'
+RESOURCES_DIR = Path(__file__).parent / 'resources'
+CONFIG_DIR = RESOURCES_DIR / 'sample_json_config'
+VIRTUALENVS_DIR = Path('./virtualenvs-dummy')
 TEST_PROJECT_NAME = 'test-project'
-TEST_PROJECT_DIR = '{}/{}'.format(os.getcwd(), TEST_PROJECT_NAME)
-PROFILING_DIR = './profiling'
+TEST_PROJECT_DIR = Path.cwd() / TEST_PROJECT_NAME
+PROFILING_DIR = Path('./profiling')
 
 
 # Can't inherit from unittest.TestCase because it breaks pytest fixture
@@ -55,16 +55,15 @@ class TestCli:
 
     @staticmethod
     def _init_for_sync_tables_states_cleanup(tables_arg: str = None) -> PipelineWise:
-        temp_path = '/tmp/pwtest/'
+        temp_path = Path('/tmp/pwtest/')
         args = CliArgs(target='target_one', tap='tap_one', tables=tables_arg)
         pipelinewise = PipelineWise(args, CONFIG_DIR, VIRTUALENVS_DIR)
-        pipelinewise.tap['files']['state'] = f'{temp_path}state.json'
+        pipelinewise.tap['files']['state'] = temp_path / 'state.json'
         pipelinewise.venv_dir = temp_path
 
         # Making a test tap bin file
-        os.makedirs(f'{temp_path}pipelinewise/bin')
-        with open(f'{temp_path}pipelinewise/bin/mysql-to-snowflake', 'a', encoding='UTF-8'):
-            pass
+        os.makedirs(temp_path / 'pipelinewise/bin')
+        (temp_path / 'pipelinewise/bin/mysql-to-snowflake').touch(exist_ok=True)
 
         return pipelinewise
 
@@ -93,31 +92,31 @@ class TestCli:
         """Singer target connector config path must be relative to the project config dir"""
         assert self.pipelinewise.get_target_dir(
             'dummy-target'
-        ) == '{}/dummy-target'.format(CONFIG_DIR)
+        ) == CONFIG_DIR / 'dummy-target'
 
     def test_tap_dir(self):
         """Singer tap connector config path must be relative to the target connector config path"""
         assert self.pipelinewise.get_tap_dir(
             'dummy-target', 'dummy-tap'
-        ) == '{}/dummy-target/dummy-tap'.format(CONFIG_DIR)
+        ) == CONFIG_DIR / 'dummy-target/dummy-tap'
 
     def test_tap_log_dir(self):
         """Singer tap log path must be relative to the tap connector config path"""
         assert self.pipelinewise.get_tap_log_dir(
             'dummy-target', 'dummy-tap'
-        ) == '{}/dummy-target/dummy-tap/log'.format(CONFIG_DIR)
+        ) == CONFIG_DIR / 'dummy-target/dummy-tap/log'
 
     def test_connector_bin(self):
         """Singer connector binary must be at a certain location under PIPELINEWISE_HOME .virtualenvs dir"""
         assert self.pipelinewise.get_connector_bin(
             'dummy-type'
-        ) == '{}/dummy-type/bin/dummy-type'.format(VIRTUALENVS_DIR)
+        ) == VIRTUALENVS_DIR / 'dummy-type/bin/dummy-type'
 
     def test_not_existing_config_dir(self):
         """Test with not existing config dir"""
         # Create a new pipelinewise object pointing to a not existing config directory
         pipelinewise_with_no_config = PipelineWise(
-            self.args, 'not-existing-config-dir', VIRTUALENVS_DIR
+            self.args, Path('not-existing-config-dir'), VIRTUALENVS_DIR
         )
 
         # It should return and empty config with empty list targets
@@ -128,13 +127,13 @@ class TestCli:
     def test_get_targets(self):
         """Targets should be loaded from JSON as is"""
         assert self.pipelinewise.get_targets() == cli.utils.load_json(
-            '{}/config.json'.format(CONFIG_DIR)
+            CONFIG_DIR / 'config.json'
         ).get('targets', [])
 
     def test_get_target(self):
         """Selecting target by ID should append connector files"""
         # Get target definitions from JSON file
-        targets = cli.utils.load_json('{}/config.json'.format(CONFIG_DIR)).get(
+        targets = cli.utils.load_json(CONFIG_DIR / 'config.json').get(
             'targets', []
         )
         exp_target_one = next(
@@ -146,10 +145,10 @@ class TestCli:
 
         # Append the connector file paths to the expected targets
         exp_target_one['files'] = Config.get_connector_files(
-            '{}/target_one'.format(CONFIG_DIR)
+            CONFIG_DIR / 'target_one'
         )
         exp_target_two['files'] = Config.get_connector_files(
-            '{}/target_two'.format(CONFIG_DIR)
+            CONFIG_DIR / 'target_two'
         )
 
         # Getting target by ID should match to original JSON and should contains the connector files list
@@ -159,7 +158,7 @@ class TestCli:
     def test_get_taps(self):
         """Selecting taps by target ID should append tap statuses"""
         # Get target definitions from JSON file
-        targets = cli.utils.load_json('{}/config.json'.format(CONFIG_DIR)).get(
+        targets = cli.utils.load_json(CONFIG_DIR / 'config.json').get(
             'targets', []
         )
         target_one = next(
@@ -192,7 +191,7 @@ class TestCli:
     def test_get_tap(self):
         """Getting tap by ID should return status, connector and target props as well"""
         # Get target definitions from JSON file
-        targets = cli.utils.load_json('{}/config.json'.format(CONFIG_DIR)).get(
+        targets = cli.utils.load_json(CONFIG_DIR / 'config.json').get(
             'targets', []
         )
         target_one = next(
@@ -205,7 +204,7 @@ class TestCli:
             'target_one', exp_tap_one['id']
         )
         exp_tap_one['files'] = Config.get_connector_files(
-            '{}/target_one/tap_one'.format(CONFIG_DIR)
+            CONFIG_DIR / 'target_one/tap_one'
         )
         exp_tap_one['target'] = self.pipelinewise.get_target('target_one')
 
@@ -246,12 +245,8 @@ class TestCli:
         ) = self.pipelinewise.create_filtered_tap_properties(
             target_type=ConnectorType('target-snowflake'),
             tap_type=ConnectorType('tap-mysql'),
-            tap_properties='{}/resources/sample_json_config/target_one/tap_one/properties.json'.format(
-                os.path.dirname(__file__)
-            ),
-            tap_state='{}/resources/sample_json_config/target_one/tap_one/state.json'.format(
-                os.path.dirname(__file__)
-            ),
+            tap_properties=Path(__file__).parent / 'resources/sample_json_config/target_one/tap_one/properties.json',
+            tap_state=Path(__file__).parent / 'resources/sample_json_config/target_one/tap_one/state.json',
             filters={
                 'selected': True,
                 'tap_target_pairs': {
@@ -291,12 +286,8 @@ class TestCli:
         ) = self.pipelinewise.create_filtered_tap_properties(
             target_type=ConnectorType('target-snowflake'),
             tap_type=ConnectorType('tap-mysql'),
-            tap_properties='{}/resources/sample_json_config/target_one/tap_one/properties.json'.format(
-                os.path.dirname(__file__)
-            ),
-            tap_state='{}/resources/sample_json_config/target_one/tap_one/state.json'.format(
-                os.path.dirname(__file__)
-            ),
+            tap_properties=Path(__file__).parent / 'resources/sample_json_config/target_one/tap_one/properties.json',
+            tap_state=Path(__file__).parent / 'resources/sample_json_config/target_one/tap_one/state.json',
             filters={
                 'selected': True,
                 'tap_target_pairs': {
@@ -339,9 +330,7 @@ class TestCli:
         """Test merging not empty schemas"""
         # TODO: Check if pipelinewise.merge_schemas is required at all or not
         tap_one_catalog = cli.utils.load_json(
-            '{}/resources/sample_json_config/target_one/tap_one/properties.json'.format(
-                os.path.dirname(__file__)
-            )
+            Path(__file__).parent / 'resources/sample_json_config/target_one/tap_one/properties.json'
         )
 
         assert (
@@ -353,14 +342,10 @@ class TestCli:
         """Test merging not empty schemas"""
         # TODO: Check if pipelinewise.merge_schemas is required at all or not
         tap_one_catalog = cli.utils.load_json(
-            '{}/resources/sample_json_config/target_one/tap_one/properties.json'.format(
-                os.path.dirname(__file__)
-            )
+            Path(__file__).parent / 'resources/sample_json_config/target_one/tap_one/properties.json'
         )
         tap_one_updated_catalog = cli.utils.load_json(
-            '{}/resources/sample_json_config/target_one/tap_one/properties_updated.json'.format(
-                os.path.dirname(__file__)
-            )
+            Path(__file__).parent / 'resources/sample_json_config/target_one/tap_one/properties_updated.json'
         )
 
         assert (
@@ -371,15 +356,9 @@ class TestCli:
     def test_make_default_selection(self):
         """Test if streams selected correctly in catalog JSON"""
         tap_one_catalog = cli.utils.load_json(
-            '{}/resources/sample_json_config/target_one/tap_one/properties.json'.format(
-                os.path.dirname(__file__)
-            )
+            Path(__file__).parent / 'resources/sample_json_config/target_one/tap_one/properties.json'
         )
-        tap_one_selection_file = (
-            '{}/resources/sample_json_config/target_one/tap_one/selection.json'.format(
-                os.path.dirname(__file__)
-            )
-        )
+        tap_one_selection_file = Path(__file__).parent / 'resources/sample_json_config/target_one/tap_one/selection.json'
 
         # Update catalog selection
         tap_one_with_selection = self.pipelinewise.make_default_selection(
@@ -424,12 +403,8 @@ class TestCli:
 
     def test_target_config(self):
         """Test merging target config.json and inheritable_config.json"""
-        target_config = '{}/resources/target-config.json'.format(
-            os.path.dirname(__file__)
-        )
-        tap_inheritable_config = '{}/resources/tap-inheritable-config.json'.format(
-            os.path.dirname(__file__)
-        )
+        target_config = Path(__file__).parent / 'resources/target-config.json'
+        tap_inheritable_config = Path(__file__).parent / 'resources/tap-inheritable-config.json'
 
         # The merged JSON written into a temp file
         temp_file = self.pipelinewise.create_consumable_target_config(
@@ -470,7 +445,7 @@ class TestCli:
 
     def test_invalid_target_config(self):
         """Test merging invalid target config.json and inheritable_config.json"""
-        target_config = '{}/resources/invalid.json'.format(os.path.dirname(__file__))
+        target_config = Path(__file__).parent / 'resources/invalid.json'
         tap_inheritable_config = 'not-existing-json'
 
         # Merging invalid or not existing JSONs should raise exception
@@ -495,7 +470,7 @@ class TestCli:
 
     def test_command_encrypt_string(self, capsys):
         """Test vault encryption command output"""
-        secret_path = '{}/resources/vault-secret.txt'.format(os.path.dirname(__file__))
+        secret_path = Path(__file__).parent / 'resources/vault-secret.txt'
 
         args = CliArgs(string='plain text', secret=secret_path)
         pipelinewise = PipelineWise(args, CONFIG_DIR, VIRTUALENVS_DIR)
@@ -516,7 +491,7 @@ class TestCli:
 
         # The test project should contain every sample YAML file
         for sample_yaml in os.listdir(
-            '{}/../../../pipelinewise/cli/samples'.format(os.path.dirname(__file__))
+            Path(__file__).parent / '../../../pipelinewise/cli/samples'
         ):
             assert os.path.isfile(os.path.join(TEST_PROJECT_DIR, sample_yaml))
 
@@ -671,8 +646,8 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
         pipelinewise = PipelineWise(args, CONFIG_DIR, VIRTUALENVS_DIR)
 
         # Create a test log file, simulating a running tap
-        pipelinewise.tap_run_log_file = 'test-tap-run-dummy.log'
-        Path('{}.running'.format(pipelinewise.tap_run_log_file)).touch()
+        pipelinewise.tap_run_log_file = Path('test-tap-run-dummy.log')
+        Path(f'{pipelinewise.tap_run_log_file}.running').touch()
 
         # Graceful exit should return 1 by default
         with pytest.raises(SystemExit) as pytest_wrapped_e:
@@ -688,8 +663,7 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
 
     def test_validate_command_1(self):
         """Test validate command should fail because of missing replication key for incremental"""
-        test_validate_command_dir =\
-            f'{os.path.dirname(__file__)}/resources/test_validate_command/missing_replication_key_incremental'
+        test_validate_command_dir = Path(__file__).parent / 'resources/test_validate_command/missing_replication_key_incremental'
 
         args = CliArgs(dir=test_validate_command_dir)
         pipelinewise = PipelineWise(args, CONFIG_DIR, VIRTUALENVS_DIR)
@@ -699,8 +673,7 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
 
     def test_validate_command_2(self):
         """Test validate command should succeed"""
-        test_validate_command_dir =\
-            f'{os.path.dirname(__file__)}/resources/test_validate_command/missing_replication_key'
+        test_validate_command_dir = Path(__file__).parent / 'resources/test_validate_command/missing_replication_key'
 
         args = CliArgs(dir=test_validate_command_dir)
         pipelinewise = PipelineWise(args, CONFIG_DIR, VIRTUALENVS_DIR)
@@ -709,7 +682,7 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
 
     def test_validate_command_3(self):
         """Test validate command should fail because of invalid target in tap config"""
-        test_validate_command_dir = f'{os.path.dirname(__file__)}/resources/test_validate_command/invalid_target'
+        test_validate_command_dir = Path(__file__).parent / 'resources/test_validate_command/invalid_target'
 
         args = CliArgs(dir=test_validate_command_dir)
         pipelinewise = PipelineWise(args, CONFIG_DIR, VIRTUALENVS_DIR)
@@ -719,8 +692,7 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
 
     def test_validate_command_4(self):
         """Test validate command should fail because of duplicate targets"""
-        test_validate_command_dir =\
-            f'{os.path.dirname(__file__)}/resources/test_validate_command/test_yaml_config_two_targets'
+        test_validate_command_dir = Path(__file__).parent / 'resources/test_validate_command/test_yaml_config_two_targets'
 
         args = CliArgs(dir=test_validate_command_dir)
         pipelinewise = PipelineWise(args, CONFIG_DIR, VIRTUALENVS_DIR)
@@ -733,8 +705,7 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
         Test validate command should fail because of transformation on json properties for a tap-target combo that
         has Fastsync
         """
-        test_validate_command_dir = \
-            f'{os.path.dirname(__file__)}/resources/test_validate_command/json_transformation_in_fastsync'
+        test_validate_command_dir = Path(__file__).parent / 'resources/test_validate_command/json_transformation_in_fastsync'
 
         args = CliArgs(dir=test_validate_command_dir)
         pipelinewise = PipelineWise(args, CONFIG_DIR, VIRTUALENVS_DIR)
@@ -747,34 +718,18 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
         """Test post import checks"""
         args = CliArgs()
         pipelinewise = PipelineWise(args, CONFIG_DIR, VIRTUALENVS_DIR)
-        test_files_dir = '{}/resources/test_post_import_checks'.format(
-            os.path.dirname(__file__)
-        )
+        test_files_dir = Path(__file__).parent / 'resources/test_post_import_checks'
 
-        tap_pk_required = cli.utils.load_json(
-            '{}/tap_config_pk_required.json'.format(test_files_dir)
+        tap_pk_required = cli.utils.load_json(test_files_dir / 'tap_config_pk_required.json')
+        tap_pk_not_required = cli.utils.load_json(test_files_dir / 'tap_config_pk_not_required.json')
+        tap_pk_not_defined = cli.utils.load_json(test_files_dir / 'tap_config_pk_not_defined.json'.format(test_files_dir)
         )
-        tap_pk_not_required = cli.utils.load_json(
-            '{}/tap_config_pk_not_required.json'.format(test_files_dir)
+        tap_with_pk = cli.utils.load_json(test_files_dir / 'tap_properties_with_pk.json'.format(test_files_dir)
         )
-        tap_pk_not_defined = cli.utils.load_json(
-            '{}/tap_config_pk_not_defined.json'.format(test_files_dir)
-        )
-        tap_with_pk = cli.utils.load_json(
-            '{}//tap_properties_with_pk.json'.format(test_files_dir)
-        )
-        tap_with_no_pk_full_table = cli.utils.load_json(
-            '{}//tap_properties_with_no_pk_full_table.json'.format(test_files_dir)
-        )
-        tap_with_no_pk_incremental = cli.utils.load_json(
-            '{}//tap_properties_with_no_pk_incremental.json'.format(test_files_dir)
-        )
-        tap_with_no_pk_log_based = cli.utils.load_json(
-            '{}//tap_properties_with_no_pk_log_based.json'.format(test_files_dir)
-        )
-        tap_with_no_pk_not_selected = cli.utils.load_json(
-            '{}//tap_properties_with_no_pk_not_selected.json'.format(test_files_dir)
-        )
+        tap_with_no_pk_full_table = cli.utils.load_json(test_files_dir / 'tap_properties_with_no_pk_full_table.json')
+        tap_with_no_pk_incremental = cli.utils.load_json(test_files_dir / 'tap_properties_with_no_pk_incremental.json')
+        tap_with_no_pk_log_based = cli.utils.load_json(test_files_dir / 'tap_properties_with_no_pk_log_based.json')
+        tap_with_no_pk_not_selected = cli.utils.load_json(test_files_dir / 'tap_properties_with_no_pk_not_selected.json')
 
         with patch(
             'pipelinewise.cli.pipelinewise.commands.run_command'
@@ -858,9 +813,7 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
             )
 
             # Test scenarios when post import checks should fail due to transformations validation command fails
-            tap_with_trans = cli.utils.load_json(
-                '{}/tap_config_with_transformations.json'.format(test_files_dir)
-            )
+            tap_with_trans = cli.utils.load_json(test_files_dir / 'tap_config_with_transformations.json')
 
             run_command_mock.return_value = (
                 1,

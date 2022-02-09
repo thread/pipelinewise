@@ -2,8 +2,6 @@
 PipelineWise CLI - Pipelinewise class
 """
 import logging
-import os
-import shutil
 import signal
 import sys
 import json
@@ -13,9 +11,10 @@ import pidfile
 
 from datetime import datetime
 from time import time
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List, Any, Tuple, cast
 from joblib import Parallel, delayed, parallel_backend
 from tabulate import tabulate
+from pathlib import Path
 
 from . import utils
 from .constants import ConnectorType
@@ -60,11 +59,14 @@ class PipelineWise:
     INCREMENTAL = 'INCREMENTAL'
     LOG_BASED = 'LOG_BASED'
     FULL_TABLE = 'FULL_TABLE'
-    STATUS_SUCCESS = 'SUCCESS'
-    STATUS_FAILED = 'FAILED'
+    STATUS_RUNNING = utils.STATUS_RUNNING.upper()
+    STATUS_FAILED = utils.STATUS_SUCCESS.upper()
+    STATUS_SUCCESS = utils.STATUS_SUCCESS.upper()
+    STATUS_TERMINATED = utils.STATUS_TERMINATED.upper()
+
     TRANSFORM_FIELD_CONNECTOR_NAME = 'transform-field'
 
-    def __init__(self, args, config_dir, venv_dir, profiling_dir=None):
+    def __init__(self, args: Any, config_dir: Path, venv_dir: Path, profiling_dir: Optional[Path] = None) -> None:
 
         self.profiling_mode = args.profiler
         self.profiling_dir = profiling_dir
@@ -74,19 +76,17 @@ class PipelineWise:
         self.config_dir = config_dir
         self.venv_dir = venv_dir
         self.extra_log = args.extra_log
-        self.pipelinewise_bin = os.path.join(
-            self.venv_dir, 'cli', 'bin', 'pipelinewise'
-        )
-        self.config_path = os.path.join(self.config_dir, 'config.json')
+        self.pipelinewise_bin = self.venv_dir / 'cli' / 'bin' / 'pipelinewise'
+        self.config_path = self.config_dir /'config.json'
         self.load_config()
         self.alert_sender = AlertSender(self.config.get('alert_handlers'))
 
-        if args.tap != '*':
+        if args.tap is not None:
             self.tap = self.get_tap(args.target, args.tap)
             self.tap_bin = self.get_connector_bin(self.tap['type'])
             self.tap_python_bin = self.get_connector_python_bin(self.tap['type'])
 
-        if args.target != '*':
+        if args.target is not None:
             self.target = self.get_target(args.target)
             self.target_bin = self.get_connector_bin(self.target['type'])
             self.target_python_bin = self.get_connector_python_bin(self.target['type'])
@@ -127,7 +127,7 @@ class PipelineWise:
 
         return stats
 
-    def create_consumable_target_config(self, target_config, tap_inheritable_config):
+    def create_consumable_target_config(self, target_config: Path, tap_inheritable_config: Path) -> Path:
         """
         Create consumable target config by appending "inheritable" config to the common target config
         """
@@ -142,7 +142,7 @@ class PipelineWise:
             # Save the new dict as JSON into a temp file
             tempfile_path = utils.create_temp_file(
                 dir=self.get_temp_dir(), prefix='target_config_', suffix='.json'
-            )[1]
+            )
             utils.save_json(dict_a, tempfile_path)
 
             return tempfile_path
@@ -156,11 +156,11 @@ class PipelineWise:
         self,
         target_type: ConnectorType,
         tap_type: ConnectorType,
-        tap_properties: str,
-        tap_state: str,
+        tap_properties: Path,
+        tap_state: Path,
         filters: Dict[str, Any],
-        create_fallback=False,
-    ):
+        create_fallback: bool = False,
+    ) -> Tuple[Path, Path, Optional[Path], Optional[Path]]:
         """
         Create a filtered version of tap properties file based on specific filter conditions.
 
@@ -325,12 +325,12 @@ class PipelineWise:
                 # Save to files: filtered and fallback properties
                 temp_properties_path = utils.create_temp_file(
                     dir=self.get_temp_dir(), prefix='properties_', suffix='.json'
-                )[1]
+                )
                 utils.save_json(properties, temp_properties_path)
 
                 temp_fallback_properties_path = utils.create_temp_file(
                     dir=self.get_temp_dir(), prefix='properties_', suffix='.json'
-                )[1]
+                )
                 utils.save_json(fallback_properties, temp_fallback_properties_path)
 
                 return (
@@ -343,15 +343,15 @@ class PipelineWise:
             # Fallback not required: Save only the filtered properties JSON
             temp_properties_path = utils.create_temp_file(
                 dir=self.get_temp_dir(), prefix='properties_', suffix='.json'
-            )[1]
+            )
             utils.save_json(properties, temp_properties_path)
 
-            return temp_properties_path, filtered_tap_stream_ids
+            return temp_properties_path, filtered_tap_stream_ids, None, None
 
         except Exception as exc:
             raise Exception(f'Cannot create JSON file - {exc}') from exc
 
-    def load_config(self):
+    def load_config(self) -> Dict:
         """
         Load configuration
         """
@@ -363,43 +363,43 @@ class PipelineWise:
         else:
             self.config = {}
 
-    def get_temp_dir(self):
+    def get_temp_dir(self) -> Path:
         """
         Returns the tap specific temp directory
         """
-        return os.path.join(self.config_dir, 'tmp')
+        return self.config_dir / 'tmp'
 
-    def get_tap_dir(self, target_id, tap_id):
+    def get_tap_dir(self, target_id: str, tap_id: str) -> Path:
         """
         Get absolute path of a tap directory
         """
-        return os.path.join(self.config_dir, target_id, tap_id)
+        return self.config_dir / target_id / tap_id
 
-    def get_tap_log_dir(self, target_id, tap_id):
+    def get_tap_log_dir(self, target_id: str, tap_id: str) -> Path:
         """
         Get absolute path of a tap log directory
         """
-        return os.path.join(self.get_tap_dir(target_id, tap_id), 'log')
+        return self.get_tap_dir(target_id, tap_id) / 'log'
 
-    def get_target_dir(self, target_id):
+    def get_target_dir(self, target_id: str) -> Path:
         """
         Get absolute path of a target directory
         """
-        return os.path.join(self.config_dir, target_id)
+        return self.config_dir / target_id
 
-    def get_connector_bin(self, connector_type):
+    def get_connector_bin(self, connector_type: str) -> Path:
         """
         Get absolute path of a connector executable
         """
-        return os.path.join(self.venv_dir, connector_type, 'bin', connector_type)
+        return self.venv_dir / connector_type / 'bin' / connector_type
 
-    def get_connector_python_bin(self, connector_type):
+    def get_connector_python_bin(self, connector_type: str) -> Path:
         """
         Get absolute path of a connector python command
         """
-        return os.path.join(self.venv_dir, connector_type, 'bin', 'python')
+        return self.venv_dir / connector_type / 'bin' / 'python'
 
-    def get_targets(self):
+    def get_targets(self) -> List[str]:
         """
         Get every target
         """
@@ -425,14 +425,14 @@ class PipelineWise:
             raise Exception(f'Cannot find {target_id} target')
 
         target_dir = self.get_target_dir(target_id)
-        if os.path.isdir(target_dir):
+        if target_dir.is_dir():
             target['files'] = Config.get_connector_files(target_dir)
         else:
             raise Exception(f'Cannot find target at {target_dir}')
 
         return target
 
-    def get_taps(self, target_id):
+    def get_taps(self, target_id: str) -> List[str]:
         """
         Get every tap from a specific target
         """
@@ -464,7 +464,7 @@ class PipelineWise:
             raise Exception(f'Cannot find {tap_id} tap in {target_id} target')
 
         tap_dir = self.get_tap_dir(target_id, tap_id)
-        if os.path.isdir(tap_dir):
+        if tap_dir.is_dir():
             tap['files'] = Config.get_connector_files(tap_dir)
         else:
             raise Exception(f'Cannot find tap at {tap_dir}')
@@ -477,7 +477,7 @@ class PipelineWise:
 
     # TODO: This method is too complex! make its complexity less than 15!
     # pylint: disable=too-many-branches,too-many-statements,too-many-nested-blocks,too-many-locals
-    def merge_schemas(self, old_schema, new_schema):  # noqa: C901
+    def merge_schemas(self, old_schema: Dict, new_schema: Dict) -> Dict:  # noqa: C901
         """
         Merge two schemas
         """
@@ -678,11 +678,11 @@ class PipelineWise:
 
         return schema_with_diff
 
-    def make_default_selection(self, schema, selection_file):
+    def make_default_selection(self, schema: Dict, selection_file: Path) -> Dict:
         """
         Select the streams to sync in schema from a selection JSON file
         """
-        if os.path.isfile(selection_file):
+        if selection_file.is_file():
             self.logger.debug('Loading pre defined selection from %s', selection_file)
             tap_selection = utils.load_json(selection_file)
             selection = tap_selection['selection']
@@ -741,31 +741,28 @@ class PipelineWise:
 
         return schema
 
-    def init(self):
+    def init(self) -> None:
         """
         Initialise and create a sample project. The project will contain sample YAML configuration for every
         supported tap and target connects.
         """
         self.logger.info('Initialising new project %s...', self.args.name)
-        project_dir = os.path.join(os.getcwd(), self.args.name)
+        project_dir = Path.cwd() / self.args.name
 
         # Create project dir if not exists
-        if os.path.exists(project_dir):
-            self.logger.error(
-                'Directory exists and cannot create new project: %s', self.args.name
-            )
-            sys.exit(1)
-        else:
-            os.mkdir(project_dir)
+        try:
+            project_dir.mkdir(parents=True)
+        except FileExistsError:
+            self.logger.exception('Directory exists and cannot create new project: %s', self.args.name)
+            raise sys.exit(1)
 
         for yaml in sorted(utils.get_sample_file_paths()):
-            yaml_basename = os.path.basename(yaml)
-            dst = os.path.join(project_dir, yaml_basename)
+            dst = project_dir / yaml.name
 
-            self.logger.info('Creating %s...', yaml_basename)
-            shutil.copyfile(yaml, dst)
+            self.logger.info('Creating %s...', yaml.name)
+            yaml.rename(dst)
 
-    def test_tap_connection(self):
+    def test_tap_connection(self) -> None:
         """
         Test the tap connection. It will connect to the data source that is defined in the tap and will return
         success if it’s available.
@@ -789,7 +786,8 @@ class PipelineWise:
         command = f'{self.tap_bin} --config {tap_config} --discover'
 
         if self.profiling_mode:
-            dump_file = os.path.join(self.profiling_dir, f'tap_{tap_id}.pstat')
+            profiling_dir = cast(Path, self.profiling_dir)
+            dump_file = profiling_dir / f'tap_{tap_id}.pstat'
             command = f'{self.tap_python_bin} -m cProfile -o {dump_file} {command}'
 
         result = commands.run_command(command)
@@ -816,7 +814,7 @@ class PipelineWise:
             )
 
     # pylint: disable=too-many-locals,inconsistent-return-statements
-    def discover_tap(self, tap=None, target=None):
+    def discover_tap(self, tap: Optional[str] = None, target: Optional[str] = None) -> Optional[str]:
         """
         Run a specific tap in discovery mode. Discovery mode is connecting to the data source
         and collecting information that is required for running the tap.
@@ -851,7 +849,8 @@ class PipelineWise:
         command = f'{tap_bin} --config {tap_config_file} --discover'
 
         if self.profiling_mode:
-            dump_file = os.path.join(self.profiling_dir, f'tap_{tap_id}.pstat')
+            profiling_dir = cast(Path, self.profiling_dir)
+            dump_file = profiling_dir / f'tap_{tap_id}.pstat'
             command = f'{tap_python_bin} -m cProfile -o {dump_file} {command}'
 
         self.logger.debug('Discovery command: %s', command)
@@ -912,7 +911,7 @@ class PipelineWise:
         except Exception as exc:
             return f'Cannot save file. {str(exc)}'
 
-    def detect_tap_status(self, target_id, tap_id):
+    def detect_tap_status(self, target_id: str, tap_id: str) -> Dict[str, str]:
         """
         Detect status of a tap
         """
@@ -927,12 +926,12 @@ class PipelineWise:
         }
 
         # Tap exists but configuration not completed
-        if not os.path.isfile(connector_files['config']):
+        if not connector_files['config'].is_file():
             status['currentStatus'] = 'not-configured'
 
         # Tap exists and has log in running status
         elif (
-            os.path.isdir(log_dir)
+            log_dir.is_dir()
             and len(utils.search_files(log_dir, patterns=['*.log.running'])) > 0
         ):
             status['currentStatus'] = 'running'
@@ -942,7 +941,7 @@ class PipelineWise:
             status['currentStatus'] = 'ready'
 
         # Get last run instance
-        if os.path.isdir(log_dir):
+        if log_dir.is_dir():
             log_files = utils.search_files(
                 log_dir, patterns=['*.log.success', '*.log.failed'], sort=True
             )
@@ -954,7 +953,7 @@ class PipelineWise:
 
         return status
 
-    def status(self):
+    def status(self) -> None:
         """
         Prints a status summary table of every imported pipeline with their tap and target.
         """
@@ -999,7 +998,7 @@ class PipelineWise:
         target: TargetParams,
         transform: TransformParams,
         stream_buffer_size: int = 0,
-    ) -> str:
+    ) -> Optional[str]:
         """
         Generate and run piped shell command to sync tables using singer taps and targets
         """
@@ -1015,9 +1014,9 @@ class PipelineWise:
         )
 
         # Do not run if another instance is already running
-        log_dir = os.path.dirname(self.tap_run_log_file)
+        log_dir = self.tap_run_log_file.parent
         if (
-            os.path.isdir(log_dir)
+            log_dir.is_dir()
             and len(utils.search_files(log_dir, patterns=['*.log.running'])) > 0
         ):
             self.logger.info(
@@ -1038,7 +1037,7 @@ class PipelineWise:
                 nonlocal start, state
 
                 if start is None or time() - start >= 2:
-                    with open(tap.state, 'w', encoding='utf-8') as state_file:
+                    with tap.state.open('w', encoding='utf-8') as state_file:
                         state_file.write(line)
 
                     # Update start time to be the current time.
@@ -1068,12 +1067,12 @@ class PipelineWise:
 
         # update the state file one last time to make sure it always has the last state message.
         if state is not None:
-            with open(tap.state, 'w', encoding='utf-8') as statefile:
+            with tap.state.open('w', encoding='utf-8') as statefile:
                 statefile.write(state)
 
     def run_tap_fastsync(
         self, tap: TapParams, target: TargetParams, transform: TransformParams
-    ):
+    ) -> Optional[str]:
         """
         Generating and running shell command to sync tables using the native fastsync components
         """
@@ -1091,9 +1090,9 @@ class PipelineWise:
         )
 
         # Do not run if another instance is already running
-        log_dir = os.path.dirname(self.tap_run_log_file)
+        log_dir = self.tap_run_log_file.parent
         if (
-            os.path.isdir(log_dir)
+            log_dir.is_dir()
             and len(utils.search_files(log_dir, patterns=['*.log.running'])) > 0
         ):
             self.logger.info(
@@ -1120,7 +1119,7 @@ class PipelineWise:
             commands.run_command(command, self.tap_run_log_file)
 
     # pylint: disable=too-many-statements,too-many-locals
-    def run_tap(self):
+    def run_tap(self) -> None:
         """
         Generating command(s) to run tap to sync data from source to target
 
@@ -1222,9 +1221,7 @@ class PipelineWise:
                     self.logger.info(
                         'Table(s) selected to sync by fastsync: %s', fastsync_stream_ids
                     )
-                    self.tap_run_log_file = os.path.join(
-                        log_dir, f'{target_id}-{tap_id}-{current_time}.fastsync.log'
-                    )
+                    self.tap_run_log_file = log_dir / f'{target_id}-{tap_id}-{current_time}.fastsync.log'
                     tap_params = TapParams(
                         tap_id=tap_id,
                         type=tap_type,
@@ -1248,9 +1245,7 @@ class PipelineWise:
                     self.logger.info(
                         'Table(s) selected to sync by singer: %s', singer_stream_ids
                     )
-                    self.tap_run_log_file = os.path.join(
-                        log_dir, f'{target_id}-{tap_id}-{current_time}.singer.log'
-                    )
+                    self.tap_run_log_file = log_dir / f'{target_id}-{tap_id}-{current_time}.singer.log'
                     tap_params = TapParams(
                         tap_id=tap_id,
                         type=tap_type,
@@ -1300,7 +1295,7 @@ class PipelineWise:
         utils.silentremove(tap_properties_singer)
         self._print_tap_run_summary(self.STATUS_SUCCESS, start_time, datetime.now())
 
-    def stop_tap(self):
+    def stop_tap(self) -> None:
         """
         Stop running tap
 
@@ -1308,9 +1303,9 @@ class PipelineWise:
         a SIGINT to the process. The SIGINT signal triggers _exit_gracefully function automatically and
         the tap stops running.
         """
-        pidfile_path = self.tap['files']['pidfile']
+        pidfile_path: Path = self.tap['files']['pidfile']
         try:
-            with open(pidfile_path, encoding='utf-8') as pidf:
+            with pidfile_path.open('r', encoding='utf-8') as pidf:
                 pid = int(pidf.read())
                 parent = psutil.Process(pid)
 
@@ -1336,7 +1331,7 @@ class PipelineWise:
             sys.exit(1)
 
     # pylint: disable=too-many-locals
-    def sync_tables(self):
+    def sync_tables(self) -> None:
         """
         Sync every or a list of selected tables from a specific tap.
         It performs an initial sync and resets the table bookmarks to their new location.
@@ -1374,7 +1369,7 @@ class PipelineWise:
             sys.exit(1)
 
         # Tap exists but configuration not completed
-        if not os.path.isfile(fastsync_bin):
+        if not fastsync_bin.is_file():
             self.logger.error(
                 'Table sync function is not implemented from %s datasources to %s type of targets',
                 tap_type,
@@ -1409,9 +1404,7 @@ class PipelineWise:
         # sync_tables command always using fastsync
         try:
             with pidfile.PIDFile(self.tap['files']['pidfile']):
-                self.tap_run_log_file = os.path.join(
-                    log_dir, f'{target_id}-{tap_id}-{current_time}.fastsync.log'
-                )
+                self.tap_run_log_file = log_dir / f'{target_id}-{tap_id}-{current_time}.fastsync.log'
 
                 # Create parameters as NamedTuples
                 tap_params = TapParams(
@@ -1461,7 +1454,7 @@ class PipelineWise:
 
         utils.silentremove(cons_target_config)
 
-    def validate(self):
+    def validate(self) -> None:
         """
         Validates a project directory with YAML tap and target files.
         """
@@ -1485,7 +1478,7 @@ class PipelineWise:
             self.logger.info('Started validating target file: %s', yaml_file)
 
             # pylint: disable=E1136  # False positive when loading vault encrypted YAML
-            target_yml = utils.load_yaml(os.path.join(yaml_dir, yaml_file), vault_secret)
+            target_yml = utils.load_yaml(yaml_dir / yaml_file, vault_secret)
             utils.validate(target_yml, target_schema)
 
             if target_yml['id'] in targets:
@@ -1502,7 +1495,7 @@ class PipelineWise:
             self.logger.info('Started validating %s ...', yaml_file)
 
             # pylint: disable=E1136  # False positive when loading vault encrypted YAML
-            tap_yml = utils.load_yaml(os.path.join(yaml_dir, yaml_file), vault_secret)
+            tap_yml = utils.load_yaml(yaml_dir / yaml_file, vault_secret)
             utils.validate(tap_yml, tap_schema)
 
             if tap_yml['id'] in tap_ids:
@@ -1549,7 +1542,7 @@ class PipelineWise:
 
         self.logger.info('Validation successful')
 
-    def import_project(self):
+    def import_project(self) -> None:
         """
         Take a list of YAML files from a directory and use it as the source to build
         singer compatible json files and organise them into pipeline directory structure
@@ -1618,7 +1611,7 @@ class PipelineWise:
         if len(discover_excs) > 0:
             sys.exit(1)
 
-    def encrypt_string(self):
+    def encrypt_string(self) -> None:
         """
         Encrypt the supplied string using the provided vault secret
         """
@@ -1664,20 +1657,20 @@ class PipelineWise:
         )
 
     # pylint: disable=unused-argument
-    def _exit_gracefully(self, sig, frame, exit_code=1):
+    def _exit_gracefully(self, sig, frame, exit_code=1) -> None:
         self.logger.info('Stopping gracefully...')
 
         # Rename log files from running to terminated status
         if self.tap_run_log_file:
-            tap_run_log_file_running = f'{self.tap_run_log_file}.running'
-            tap_run_log_file_terminated = f'{self.tap_run_log_file}.terminated'
+            tap_run_log_file_running = utils.log_file_with_status(self.tap_run_log_file, utils.STATUS_RUNNING)
+            tap_run_log_file_terminated = utils.log_file_with_status(self.tap_run_log_file, utils.STATUS_TERMINATED)
 
-            if os.path.isfile(tap_run_log_file_running):
-                os.rename(tap_run_log_file_running, tap_run_log_file_terminated)
+            if tap_run_log_file_running.is_file():
+                tap_run_log_file_running.rename(tap_run_log_file_terminated)
 
         sys.exit(exit_code)
 
-    def _print_tap_run_summary(self, status, start_time, end_time):
+    def _print_tap_run_summary(self, status: str, start_time: datetime, end_time: datetime) -> None:
         summary = f"""
 -------------------------------------------------------
 TAP RUN SUMMARY
@@ -1692,25 +1685,25 @@ TAP RUN SUMMARY
 
         # Add summary to tap run log file
         if self.tap_run_log_file:
-            tap_run_log_file_success = f'{self.tap_run_log_file}.success'
-            tap_run_log_file_failed = f'{self.tap_run_log_file}.failed'
+            tap_run_log_file_success = utils.log_file_with_status(self.tap_run_log_file, utils.STATUS_SUCCESS)
+            tap_run_log_file_failed = utils.log_file_with_status(self.tap_run_log_file, utils.STATUS_FAILED)
 
             # Find which log file we need to write the summary
             log_file_to_write_summary = None
-            if os.path.isfile(tap_run_log_file_success):
+            if tap_run_log_file_success.is_file():
                 log_file_to_write_summary = tap_run_log_file_success
-            elif os.path.isfile(tap_run_log_file_failed):
+            elif tap_run_log_file_failed.is_file():
                 log_file_to_write_summary = tap_run_log_file_failed
 
             # Append the summary to the right log file
             if log_file_to_write_summary:
-                with open(log_file_to_write_summary, 'a', encoding='utf-8') as logfile:
+                with log_file_to_write_summary.open('a', encoding='utf-8') as logfile:
                     logfile.write(summary)
 
     # pylint: disable=unused-variable
     def _run_post_import_tap_checks(
         self, tap: Dict, catalog: Dict, target_id: str
-    ) -> List:
+    ) -> List[str]:
         """
         Run post import checks on a tap.
 
@@ -1769,9 +1762,9 @@ TAP RUN SUMMARY
             utils.silentremove(state_file)
 
     @staticmethod
-    def _clean_tables_from_bookmarks_in_state_file(state_file_to_clean: str, tables: str) -> None:
+    def _clean_tables_from_bookmarks_in_state_file(state_file_to_clean: Path, tables: str) -> None:
         try:
-            with open(state_file_to_clean, 'r+', encoding='UTF-8') as state_file:
+            with state_file_to_clean.open('r+', encoding='UTF-8') as state_file:
                 state_data = json.load(state_file)
                 bookmarks = state_data.get('bookmarks')
                 list_of_tables = tables.split(',')
@@ -1789,7 +1782,7 @@ TAP RUN SUMMARY
             pass
 
     def __validate_transformations(
-        self, transformation_file: str, catalog: Dict, tap_id: str, target_id: str
+        self, transformation_file: Path, catalog: Dict, tap_id: str, target_id: str
     ) -> Optional[str]:
         """
         Run validation of transformation config
@@ -1807,7 +1800,7 @@ TAP RUN SUMMARY
             # we need this file to execute the validation cli command
             temp_catalog_file = utils.create_temp_file(
                 dir=self.get_temp_dir(), prefix='properties_', suffix='.json'
-            )[1]
+            )
 
             utils.save_json(catalog, temp_catalog_file)
 
@@ -1816,9 +1809,8 @@ TAP RUN SUMMARY
                 """
 
             if self.profiling_mode:
-                dump_file = os.path.join(
-                    self.profiling_dir, f'transformation_{tap_id}_{target_id}.pstat'
-                )
+                profiling_dir = cast(Path, self.profiling_dir)
+                dump_file = profiling_dir / f'transformation_{tap_id}_{target_id}.pstat'
                 command = f'{self.transform_field_python_bin} -m cProfile -o {dump_file} {command}'
 
             self.logger.debug('Transformation validation command: %s', command)

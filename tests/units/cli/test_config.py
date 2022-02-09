@@ -1,12 +1,13 @@
-import os
 import shutil
 import pytest
+
+from pathlib import Path
 
 from pipelinewise import cli
 from pipelinewise.cli.config import Config
 from pipelinewise.cli.errors import InvalidConfigException
 
-PIPELINEWISE_TEST_HOME = '/tmp/.pipelinewise'
+PIPELINEWISE_TEST_HOME = Path('/tmp/.pipelinewise')
 
 
 # Todo: Inherit from unittest.TestCase
@@ -22,28 +23,28 @@ class TestConfig:
 
         # config dir and path should be generated automatically
         assert config.config_dir == PIPELINEWISE_TEST_HOME
-        assert config.config_path == '{}/config.json'.format(PIPELINEWISE_TEST_HOME)
+        assert config.config_path == PIPELINEWISE_TEST_HOME / 'config.json'
         assert config.targets == {}
 
     def test_connector_files(self):
         """Every singer connector must have a list of JSON files at certain locations"""
-        assert Config.get_connector_files('/var/singer-connector') == {
-            'config': '/var/singer-connector/config.json',
-            'inheritable_config': '/var/singer-connector/inheritable_config.json',
-            'properties': '/var/singer-connector/properties.json',
-            'state': '/var/singer-connector/state.json',
-            'transformation': '/var/singer-connector/transformation.json',
-            'selection': '/var/singer-connector/selection.json',
-            'pidfile': '/var/singer-connector/pipelinewise.pid',
+        assert Config.get_connector_files(Path('/var/singer-connector')) == {
+            'config': Path('/var/singer-connector/config.json'),
+            'inheritable_config': Path('/var/singer-connector/inheritable_config.json'),
+            'properties': Path('/var/singer-connector/properties.json'),
+            'state': Path('/var/singer-connector/state.json'),
+            'transformation': Path('/var/singer-connector/transformation.json'),
+            'selection': Path('/var/singer-connector/selection.json'),
+            'pidfile': Path('/var/singer-connector/pipelinewise.pid'),
         }
 
     def test_from_yamls(self):
         """Test creating Config object using YAML configuration directory as the input"""
 
         # Create Config object by parsing target and tap YAMLs in a directory
-        yaml_config_dir = f'{os.path.dirname(__file__)}/resources/test_yaml_config'
+        yaml_config_dir = Path(__file__).parent / 'resources/test_yaml_config'
 
-        vault_secret = f'{os.path.dirname(__file__)}/resources/vault-secret.txt'
+        vault_secret = Path(__file__).parent / 'resources/vault-secret.txt'
 
         # Parse YAML files and create the config object
         config = Config.from_yamls(
@@ -52,7 +53,7 @@ class TestConfig:
 
         # config dir and path should be generated automatically
         assert config.config_dir == PIPELINEWISE_TEST_HOME
-        assert config.config_path == f'{PIPELINEWISE_TEST_HOME}/config.json'
+        assert config.config_path == PIPELINEWISE_TEST_HOME / 'config.json'
 
         # Vault encrypted alert handlers should be loaded into global config
         assert config.global_config == {
@@ -85,13 +86,13 @@ class TestConfig:
                     'warehouse': 'MY_WAREHOUSE',
                 },
                 'files': {
-                    'config': f'{PIPELINEWISE_TEST_HOME}/test_snowflake_target/config.json',
-                    'inheritable_config': f'{ PIPELINEWISE_TEST_HOME}/test_snowflake_target/inheritable_config.json',
-                    'properties': f'{PIPELINEWISE_TEST_HOME}/test_snowflake_target/properties.json',
-                    'selection': f'{PIPELINEWISE_TEST_HOME}/test_snowflake_target/selection.json',
-                    'state': f'{PIPELINEWISE_TEST_HOME}/test_snowflake_target/state.json',
-                    'transformation': f'{PIPELINEWISE_TEST_HOME}/test_snowflake_target/transformation.json',
-                    'pidfile': f'{PIPELINEWISE_TEST_HOME}/test_snowflake_target/pipelinewise.pid',
+                    'config': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/config.json',
+                    'inheritable_config': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/inheritable_config.json',
+                    'properties': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/properties.json',
+                    'selection': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/selection.json',
+                    'state': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/state.json',
+                    'transformation': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/transformation.json',
+                    'pidfile': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/pipelinewise.pid',
                 },
                 'taps': [
                     {
@@ -113,16 +114,13 @@ class TestConfig:
                             'user': '<USER>',
                         },
                         'files': {
-                            'config': f'{PIPELINEWISE_TEST_HOME}/test_snowflake_target/mysql_sample/config.json',
-                            'inheritable_config': f'{PIPELINEWISE_TEST_HOME}'
-                                                  f'/test_snowflake_target/mysql_sample/inheritable_config.json',
-                            'properties': f'{PIPELINEWISE_TEST_HOME}/'
-                                          f'test_snowflake_target/mysql_sample/properties.json',
-                            'selection': f'{PIPELINEWISE_TEST_HOME}/test_snowflake_target/mysql_sample/selection.json',
-                            'state': f'{PIPELINEWISE_TEST_HOME}/test_snowflake_target/mysql_sample/state.json',
-                            'transformation': f'{PIPELINEWISE_TEST_HOME}'
-                                              f'/test_snowflake_target/mysql_sample/transformation.json',
-                            'pidfile': f'{PIPELINEWISE_TEST_HOME}/test_snowflake_target/mysql_sample/pipelinewise.pid',
+                            'config': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/config.json',
+                            'inheritable_config': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/inheritable_config.json',
+                            'properties': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/properties.json',
+                            'selection': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/selection.json',
+                            'state': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/state.json',
+                            'transformation': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/transformation.json',
+                            'pidfile': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/pipelinewise.pid',
                         },
                         'schemas': [
                             {
@@ -151,10 +149,9 @@ class TestConfig:
         """Test creating Config object using invalid YAML configuration directory"""
 
         # Initialising config object with a tap that's referencing an unknown target should exit
-        yaml_config_dir = '{}/resources/test_invalid_tap_mongo_yaml_config'.format(
-            os.path.dirname(__file__)
-        )
-        vault_secret = '{}/resources/vault-secret.txt'.format(os.path.dirname(__file__))
+        yaml_config_dir = Path(__file__).parent / 'resources/test_invalid_tap_mongo_yaml_config'
+        vault_secret = Path(__file__).parent / 'resources/vault-secret.txt'
+
         print(yaml_config_dir)
         with pytest.raises(InvalidConfigException):
             Config.from_yamls(PIPELINEWISE_TEST_HOME, yaml_config_dir, vault_secret)
@@ -172,10 +169,8 @@ class TestConfig:
             )
 
         # Initialising config object with a tap that's referencing an unknown target should exit
-        yaml_config_dir = '{}/resources/test_invalid_yaml_config'.format(
-            os.path.dirname(__file__)
-        )
-        vault_secret = '{}/resources/vault-secret.txt'.format(os.path.dirname(__file__))
+        yaml_config_dir = Path(__file__).parent / 'resources/test_invalid_yaml_config'
+        vault_secret = Path(__file__).parent / 'resources/vault-secret.txt'
 
         with pytest.raises(SystemExit) as pytest_wrapped_e:
             Config.from_yamls(PIPELINEWISE_TEST_HOME, yaml_config_dir, vault_secret)
@@ -198,8 +193,8 @@ class TestConfig:
             )
 
         # Initialising config object with a tap that's referencing an unknown target should exit
-        yaml_config_dir = f'{os.path.dirname(__file__)}/resources/test_invalid_yaml_config_with_duplicate_targets'
-        vault_secret = f'{os.path.dirname(__file__)}/resources/vault-secret.txt'
+        yaml_config_dir = Path(__file__).parent / 'resources/test_invalid_yaml_config_with_duplicate_targets'
+        vault_secret = Path(__file__).parent / 'resources/vault-secret.txt'
 
         with pytest.raises(SystemExit) as pytest_wrapped_e:
             Config.from_yamls(PIPELINEWISE_TEST_HOME, yaml_config_dir, vault_secret)
@@ -211,62 +206,42 @@ class TestConfig:
         config = Config(PIPELINEWISE_TEST_HOME)
 
         # Target and tap directory should be g
-        assert config.get_temp_dir() == '{}/tmp'.format(PIPELINEWISE_TEST_HOME)
-        assert config.get_target_dir('test-target-id') == '{}/test-target-id'.format(
-            PIPELINEWISE_TEST_HOME
-        )
+        assert config.get_temp_dir() == PIPELINEWISE_TEST_HOME / 'tmp'
+        assert config.get_target_dir('test-target-id') == PIPELINEWISE_TEST_HOME / 'test-target-id'
         assert config.get_tap_dir(
             'test-target-id', 'test-tap-id'
-        ) == '{}/test-target-id/test-tap-id'.format(PIPELINEWISE_TEST_HOME)
+        ) == PIPELINEWISE_TEST_HOME / 'test-target-id/test-tap-id'
 
-        assert config.get_connector_files('/var/singer-connector') == {
-            'config': '/var/singer-connector/config.json',
-            'inheritable_config': '/var/singer-connector/inheritable_config.json',
-            'properties': '/var/singer-connector/properties.json',
-            'state': '/var/singer-connector/state.json',
-            'transformation': '/var/singer-connector/transformation.json',
-            'selection': '/var/singer-connector/selection.json',
-            'pidfile': '/var/singer-connector/pipelinewise.pid',
+        assert config.get_connector_files(Path('/var/singer-connector')) == {
+            'config': Path('/var/singer-connector/config.json'),
+            'inheritable_config': Path('/var/singer-connector/inheritable_config.json'),
+            'properties': Path('/var/singer-connector/properties.json'),
+            'state': Path('/var/singer-connector/state.json'),
+            'transformation': Path('/var/singer-connector/transformation.json'),
+            'selection': Path('/var/singer-connector/selection.json'),
+            'pidfile': Path('/var/singer-connector/pipelinewise.pid'),
         }
 
     def test_save_config(self):
         """Test config target and tap JSON save functionalities"""
 
         # Load a full configuration set from YAML files
-        yaml_config_dir = '{}/resources/test_yaml_config'.format(
-            os.path.dirname(__file__)
-        )
-        vault_secret = '{}/resources/vault-secret.txt'.format(os.path.dirname(__file__))
+        yaml_config_dir = Path(__file__).parent / 'resources/test_yaml_config'
+        vault_secret = Path(__file__).parent / 'resources/vault-secret.txt'
 
-        json_config_dir = './pipelinewise-test-config'
+        json_config_dir = Path('./pipelinewise-test-config')
         config = Config.from_yamls(json_config_dir, yaml_config_dir, vault_secret)
 
         # Save the config as singer compatible JSON files
         config.save()
 
         # Check if every required JSON file created, both for target and tap
-        main_config_json = '{}/config.json'.format(json_config_dir)
-        target_config_json = '{}/test_snowflake_target/config.json'.format(
-            json_config_dir
-        )
-        tap_config_json = '{}/test_snowflake_target/mysql_sample/config.json'.format(
-            json_config_dir
-        )
-        tap_inheritable_config_json = (
-            '{}/test_snowflake_target/mysql_sample/inheritable_config.json'.format(
-                json_config_dir
-            )
-        )
-        tap_selection_json = (
-            '{}/test_snowflake_target/mysql_sample/selection.json'.format(
-                json_config_dir
-            )
-        )
-        tap_transformation_json = (
-            '{}/test_snowflake_target/mysql_sample/transformation.json'.format(
-                json_config_dir
-            )
-        )
+        main_config_json = json_config_dir / 'config.json'
+        target_config_json = json_config_dir / 'test_snowflake_target/config.json'
+        tap_config_json = json_config_dir / 'test_snowflake_target/mysql_sample/config.json'
+        tap_inheritable_config_json = json_config_dir / 'test_snowflake_target/mysql_sample/inheritable_config.json'
+        tap_selection_json = json_config_dir / 'test_snowflake_target/mysql_sample/selection.json'
+        tap_transformation_json = json_config_dir / 'test_snowflake_target/mysql_sample/transformation.json'
 
         # Check content of the generated JSON files
         assert cli.utils.load_json(main_config_json) == {
@@ -344,7 +319,7 @@ class TestConfig:
                     'target_schema_select_permissions': ['grp_stats'],
                 }
             },
-            'temp_dir': './pipelinewise-test-config/tmp',
+            'temp_dir': 'pipelinewise-test-config/tmp',
             'tap_id': 'mysql_sample',
             'query_tag': '{"ppw_component": "tap-mysql", "tap_id": "mysql_sample", '
             '"database": "{{database}}", "schema": "{{schema}}", "table": "{{table}}"}',
