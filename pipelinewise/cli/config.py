@@ -2,11 +2,11 @@
 PipelineWise CLI - Configuration class
 """
 import logging
-import os
 import sys
 import json
 
-from typing import Dict, List
+from typing import Dict, List, Optional
+from pathlib import Path
 
 from pipelinewise.utils import safe_column_name
 from . import utils
@@ -15,7 +15,7 @@ from . import utils
 class Config:
     """PipelineWise Configuration Class"""
 
-    def __init__(self, config_dir):
+    def __init__(self, config_dir: Path):
         """
         Class Constructor
 
@@ -23,13 +23,13 @@ class Config:
         """
         self.logger = logging.getLogger(__name__)
         self.config_dir = config_dir
-        self.config_path = os.path.join(self.config_dir, 'config.json')
+        self.config_path = self.config_dir / 'config.json'
         self.global_config = {}
         self.targets = {}
 
     @classmethod
     # pylint: disable=too-many-locals
-    def from_yamls(cls, config_dir, yaml_dir='.', vault_secret=None):
+    def from_yamls(cls, config_dir, yaml_dir=Path('.'), vault_secret=None) -> 'Config':
         """
         Class Constructor
 
@@ -43,7 +43,7 @@ class Config:
         taps = {}
 
         config.logger.info('Searching YAML config files in %s', yaml_dir)
-        global_config_yaml = os.path.join(yaml_dir, 'config.yml')
+        global_config_yaml = yaml_dir / 'config.yml'
         tap_yamls, target_yamls = utils.get_tap_target_names(yaml_dir)
 
         global_config_schema = utils.load_schema('config')
@@ -51,7 +51,7 @@ class Config:
         tap_schema = utils.load_schema('tap')
 
         # Load global config yaml
-        if os.path.exists(global_config_yaml):
+        if global_config_yaml.exists():
             global_config = utils.load_yaml(global_config_yaml, vault_secret)
             utils.validate(instance=global_config, schema=global_config_schema)
             config.global_config = global_config or {}
@@ -61,7 +61,7 @@ class Config:
         for yaml_file in target_yamls:
             config.logger.info('LOADING TARGET: %s', yaml_file)
             target_data = utils.load_yaml(
-                os.path.join(yaml_dir, yaml_file), vault_secret
+                yaml_dir / yaml_file, vault_secret
             )
             utils.validate(instance=target_data, schema=target_schema)
 
@@ -85,7 +85,7 @@ class Config:
         # Load every tap yaml into targets dictionary
         for yaml_file in tap_yamls:
             config.logger.info('LOADING TAP: %s', yaml_file)
-            tap_data = utils.load_yaml(os.path.join(yaml_dir, yaml_file), vault_secret)
+            tap_data = utils.load_yaml(yaml_dir / yaml_file, vault_secret)
             utils.validate(instance=tap_data, schema=tap_schema)
 
             tap_id = tap_data['id']
@@ -124,42 +124,40 @@ class Config:
 
         return config
 
-    def get_temp_dir(self):
+    def get_temp_dir(self) -> Path:
         """
         Returns the tap specific temp directory
         """
-        return os.path.join(self.config_dir, 'tmp')
+        return self.config_dir / 'tmp'
 
-    def get_target_dir(self, target_id):
+    def get_target_dir(self, target_id: str) -> Path:
         """
         Returns the absolute path of a target configuration directory
         """
-        return os.path.join(self.config_dir, target_id)
+        return self.config_dir / target_id
 
-    def get_tap_dir(self, target_id, tap_id):
+    def get_tap_dir(self, target_id: str, tap_id: str) -> Path:
         """
         Returns the absolute path of a tap configuration directory
         """
-        return os.path.join(self.config_dir, target_id, tap_id)
+        return self.config_dir / target_id / tap_id
 
     @staticmethod
-    def get_connector_files(connector_dir: str) -> Dict:
+    def get_connector_files(connector_dir: Path) -> Dict[str, Path]:
         """
         Returns the absolute paths of a tap/target configuration files
         """
         return {
-            'config': os.path.join(connector_dir, 'config.json'),
-            'inheritable_config': os.path.join(
-                connector_dir, 'inheritable_config.json'
-            ),
-            'properties': os.path.join(connector_dir, 'properties.json'),
-            'state': os.path.join(connector_dir, 'state.json'),
-            'transformation': os.path.join(connector_dir, 'transformation.json'),
-            'selection': os.path.join(connector_dir, 'selection.json'),
-            'pidfile': os.path.join(connector_dir, 'pipelinewise.pid'),
+            'config': connector_dir / 'config.json',
+            'inheritable_config': connector_dir / 'inheritable_config.json',
+            'properties': connector_dir / 'properties.json',
+            'state': connector_dir / 'state.json',
+            'transformation': connector_dir / 'transformation.json',
+            'selection': connector_dir / 'selection.json',
+            'pidfile': connector_dir / 'pipelinewise.pid',
         }
 
-    def save(self):
+    def save(self) -> None:
         """
         Generating pipelinewise configuration directory layout on the disk.
 
@@ -181,7 +179,7 @@ class Config:
                 )
                 self.save_tap_jsons(target, tap, extra_config_keys)
 
-    def save_main_config_json(self):
+    def save_main_config_json(self) -> None:
         """
         Generating pipelinewise main config.json file
 
@@ -220,30 +218,28 @@ class Config:
         main_config = {**self.global_config, **{'targets': targets}}
 
         # Create config dir if not exists
-        if not os.path.exists(self.config_dir):
-            os.mkdir(self.config_dir)
+        self.config_dir.mkdir(parents=True, exist_ok=True)
 
         # Save to JSON
         utils.save_json(main_config, self.config_path)
 
-    def save_target_jsons(self, target):
+    def save_target_jsons(self, target: Dict) -> None:
         """
         Generating JSON config files for a singer target connector:
             1. config.json             :(Singer spec):  Tap connection details
         """
         target_dir = self.get_target_dir(target.get('id'))
-        target_config_path = os.path.join(target_dir, 'config.json')
+        target_config_path = target_dir / 'config.json'
         self.logger.info('SAVING TARGET JSONS to %s', target_config_path)
 
         # Create target dir if not exists
-        if not os.path.exists(target_dir):
-            os.mkdir(target_dir)
+        target_dir.mkdir(parents=True, exist_ok=True)
 
         # Save target config.json
         utils.save_json(target.get('db_conn'), target_config_path)
 
     # pylint: disable=too-many-locals
-    def save_tap_jsons(self, target, tap, extra_config_keys=None):
+    def save_tap_jsons(self, target: Dict, tap: Dict, extra_config_keys: Optional[Dict] = None) -> None:
         """
         Generating JSON config files for a singer tap connector:
             1. config.json             :(Singer spec):  Tap connection details
@@ -274,14 +270,13 @@ class Config:
         self.logger.info('SAVING TAP JSONS to %s', tap_dir)
 
         # Define tap JSON file paths
-        tap_config_path = os.path.join(tap_dir, 'config.json')
-        tap_selection_path = os.path.join(tap_dir, 'selection.json')
-        tap_transformation_path = os.path.join(tap_dir, 'transformation.json')
-        tap_inheritable_config_path = os.path.join(tap_dir, 'inheritable_config.json')
+        tap_config_path = tap_dir / 'config.json'
+        tap_selection_path = tap_dir / 'selection.json'
+        tap_transformation_path = tap_dir / 'transformation.json'
+        tap_inheritable_config_path = tap_dir / 'inheritable_config.json'
 
         # Create tap dir if not exists
-        if not os.path.exists(tap_dir):
-            os.mkdir(tap_dir)
+        tap_dir.mkdir(parents=True, exist_ok=True)
 
         # Save the generated JSON files
         utils.save_json(tap_config, tap_config_path)

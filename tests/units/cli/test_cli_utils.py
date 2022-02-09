@@ -1,11 +1,12 @@
 import os
+from pathlib import Path
 import re
 import pytest
 
 from pipelinewise import cli
 from pipelinewise.cli.errors import InvalidConfigException
 
-VIRTUALENVS_DIR = './virtualenvs-dummy'
+VIRTUALENVS_DIR = Path('./virtualenvs-dummy')
 
 
 # pylint: disable=no-self-use,too-many-public-methods,fixme
@@ -27,23 +28,23 @@ class TestUtils:
         assert cli.utils.is_json('{"prop": 123}') is True
         assert cli.utils.is_json('{"prop-str":"dummy-string","prop-int":123,"prop-bool":true}') is True
 
-        assert cli.utils.is_json_file('./dummy-json') is False
-        assert cli.utils.is_json_file('{}/resources/example.json'.format(os.path.dirname(__file__))) is True
-        assert cli.utils.is_json_file('{}/resources/invalid.json'.format(os.path.dirname(__file__))) is False
-        assert cli.utils.is_json_file('{}/resources'.format(os.path.dirname(__file__))) is False
+        assert cli.utils.is_json_file(Path('./dummy-json')) is False
+        assert cli.utils.is_json_file(Path(__file__).parent / 'resources/example.json') is True
+        assert cli.utils.is_json_file(Path(__file__).parent / 'resources/invalid.json') is False
+        assert cli.utils.is_json_file(Path(__file__).parent / 'resources') is False
 
     def test_json_loader(self):
         """Testing JSON loader functions"""
         # Loading JSON file that not exist should return None
-        assert cli.utils.load_json('/invalid/location/to/json') is None
+        assert cli.utils.load_json(Path('/invalid/location/to/json')) is None
 
         # Loading JSON file with invalid JSON syntax should raise exception
         with pytest.raises(Exception):
-            cli.utils.load_json('{}/resources/invalid.json'.format(os.path.dirname(__file__)))
+            cli.utils.load_json(Path(__file__).parent / 'resources/invalid.json')
 
         # Loading JSON should return python dict
         assert \
-            cli.utils.load_json('{}/resources/example.json'.format(os.path.dirname(__file__))) == \
+            cli.utils.load_json(Path(__file__).parent / 'resources/example.json') == \
             {
                 'glossary': {
                     'title': 'example glossary',
@@ -72,11 +73,12 @@ class TestUtils:
         obj = {'foo': 'bar'}
         # Saving to invalid path should raise exception
         with pytest.raises(Exception):
-            cli.utils.save_json(obj, '/invalid/path')
+            cli.utils.save_json(obj, Path('/invalid/path'))
 
         # Saving and reloading should match
-        cli.utils.save_json(obj, 'test-json.json')
-        assert cli.utils.load_json('test-json.json') == obj
+        path = Path('test-json.json')
+        cli.utils.save_json(obj, path)
+        assert cli.utils.load_json(path) == obj
 
         # Delete output file, it's not required
         os.remove('test-json.json')
@@ -95,41 +97,40 @@ class TestUtils:
                 - prop2: 456
             """) is True
 
-        assert cli.utils.is_yaml_file('./dummy-yaml') is False
-        assert cli.utils.is_yaml_file('{}/resources/example.yml'.format(os.path.dirname(__file__))) is True
-        assert cli.utils.is_yaml_file('{}/resources/invalid.yml'.format(os.path.dirname(__file__))) is False
-        assert cli.utils.is_yaml_file('{}/resources'.format(os.path.dirname(__file__))) is False
+        assert cli.utils.is_yaml_file(Path('./dummy-yaml')) is False
+        assert cli.utils.is_yaml_file(Path(__file__).parent / 'resources/example.yml') is True
+        assert cli.utils.is_yaml_file(Path(__file__).parent / 'resources/invalid.yml') is False
+        assert cli.utils.is_yaml_file(Path(__file__).parent / 'resources') is False
 
     def test_yaml_loader(self):
         """Testing YAML loader functions"""
         # Loading YAML file that not exist should return None
-        assert cli.utils.load_yaml('/invalid/location/to/yaml') is None
+        assert cli.utils.load_yaml(Path('/invalid/location/to/yaml')) is None
 
         # Loading YAML file with invalid YAML syntax should raise exception
         with pytest.raises(Exception):
-            cli.utils.load_yaml('{}/resources/invalid.yml'.format(os.path.dirname(__file__)))
+            cli.utils.load_yaml(Path(__file__).parent / 'resources/invalid.yml')
 
         # Loading YAML file with valid YAML syntax but invalid vault secret file should raise exception
         with pytest.raises(Exception):
-            cli.utils.load_yaml('{}/resources/example.yml'.format(os.path.dirname(__file__)),
-                                'invalid-secret-file-path')
+            cli.utils.load_yaml(Path(__file__).parent / 'resources/example.yml', 'invalid-secret-file-path')
 
         # Loading valid YAML file with no vault encryption
         assert \
-            cli.utils.load_yaml('{}/resources/example.yml'.format(os.path.dirname(__file__))) == \
+            cli.utils.load_yaml(Path(__file__).parent / 'resources/example.yml') == \
             ['Apple', 'Orange', 'Strawberry', 'Mango']
 
         # Loading valid YAML file with vault encrypted properties
         assert \
             cli.utils.load_yaml(
-                '{}/resources/example-with-vault.yml'.format(os.path.dirname(__file__)),
-                '{}/resources/vault-secret.txt'.format(os.path.dirname(__file__))) == \
+                Path(__file__).parent / 'resources/example-with-vault.yml',
+                Path(__file__).parent / 'resources/vault-secret.txt') == \
             ['Apple', 'Orange', 'Strawberry', 'Mango', 'Vault Encrypted Secret Fruit']
 
         os.environ['APP_SECRET'] = app_secret = 'my-secret'
         os.environ['APP_ENVIRONMENT'] = app_environment = 'test'
         assert \
-            cli.utils.load_yaml('{}/resources/example-with-jinja-env-var.yml'.format(os.path.dirname(__file__))) == \
+            cli.utils.load_yaml(Path(__file__).parent / 'resources/example-with-jinja-env-var.yml') == \
             {'app': 'my-app', 'secret': app_secret, 'environment': app_environment}
 
     def test_sample_file_path(self):
@@ -137,9 +138,9 @@ class TestUtils:
         for sample in cli.utils.get_sample_file_paths():
             assert os.path.isfile(sample) is True
             assert \
-                re.match('.*config.yml$', sample) or \
-                re.match('.*(tap|target)_.*.yml.sample$', sample) or \
-                re.match('.*README.md$', sample)
+                re.match('.*config.yml$', str(sample)) or \
+                re.match('.*(tap|target)_.*.yml.sample$', str(sample)) or \
+                re.match('.*README.md$', str(sample))
 
     def test_extract_log_attributes(self):
         """Log files must match to certain pattern with embedded attributes in the file name"""
@@ -181,7 +182,7 @@ class TestUtils:
         # Giving tap and target types should be enough to generate full path to fastsync binaries
         assert \
             cli.utils.get_fastsync_bin(VIRTUALENVS_DIR, 'mysql', 'snowflake') == \
-            '{}/pipelinewise/bin/mysql-to-snowflake'.format(VIRTUALENVS_DIR)
+            VIRTUALENVS_DIR / 'pipelinewise/bin/mysql-to-snowflake'
 
     def test_vault(self):
         """Test vault encrypt and decrypt functionalities"""
@@ -193,7 +194,8 @@ class TestUtils:
 
         # Encrypted string should start with $ANSIBLE_VAULT; identifier
         encrypted_str = str(
-            cli.utils.vault_encrypt('plain_text', '{}/resources/vault-secret.txt'.format(os.path.dirname(__file__))))
+            cli.utils.vault_encrypt('plain_text', Path(__file__).parent / 'resources/vault-secret.txt')
+        )
         assert encrypted_str.startswith("b'$ANSIBLE_VAULT;") is True
 
         # Formatted encrypted string should start with special token and should keep the original vault encrypted value
@@ -214,8 +216,7 @@ class TestUtils:
         assert pytest_wrapped_e.value.code == 1
 
         # Loading existing JSON schema should be loaded correctly
-        tap_schema = cli.utils.load_json('{}/../../../pipelinewise/cli/schemas/tap.json'.format(
-            os.path.dirname(__file__)))
+        tap_schema = cli.utils.load_json(Path(__file__).parent / '../../../pipelinewise/cli/schemas/tap.json')
         assert cli.utils.load_schema('tap') == tap_schema
 
     def test_json_validate_tap(self):
@@ -223,11 +224,11 @@ class TestUtils:
         schema = cli.utils.load_schema('tap')
 
         # Valid instance should return None
-        valid_tap = cli.utils.load_yaml('{}/resources/tap-valid-mysql.yml'.format(os.path.dirname(__file__)))
+        valid_tap = cli.utils.load_yaml(Path(__file__).parent / 'resources/tap-valid-mysql.yml')
         assert cli.utils.validate(valid_tap, schema) is None
 
         # Invalid instance should exit
-        invalid_tap = cli.utils.load_yaml('{}/resources/tap-invalid.yml'.format(os.path.dirname(__file__)))
+        invalid_tap = cli.utils.load_yaml(Path(__file__).parent / 'resources/tap-invalid.yml')
         self.assert_json_is_invalid(schema, invalid_tap)
 
     def test_json_validate_target(self):
@@ -235,11 +236,11 @@ class TestUtils:
         schema = cli.utils.load_schema('target')
 
         # Valid instance should return None
-        valid_target = cli.utils.load_yaml('{}/resources/target-valid-s3-csv.yml'.format(os.path.dirname(__file__)))
+        valid_target = cli.utils.load_yaml(Path(__file__).parent / 'resources/target-valid-s3-csv.yml')
         assert cli.utils.validate(valid_target, schema) is None
 
         # Invalid instance should exit
-        invalid_target = cli.utils.load_yaml('{}/resources/target-invalid-s3-csv.yml'.format(os.path.dirname(__file__)))
+        invalid_target = cli.utils.load_yaml(Path(__file__).parent / 'resources/target-invalid-s3-csv.yml')
         self.assert_json_is_invalid(schema, invalid_target)
 
     def test_delete_keys(self):
@@ -275,11 +276,11 @@ class TestUtils:
     def test_silentremove(self):
         """Test removing functions"""
         # Deleting non existing file should not raise exception
-        assert cli.utils.silentremove('this-file-not-exists.json') is None
+        assert cli.utils.silentremove(Path('this-file-not-exists.json')) is None
 
     def test_tap_properties(self):
         """Test tap property getter functions"""
-        tap_mysql = cli.utils.load_yaml('{}/resources/tap-valid-mysql.yml'.format(os.path.dirname(__file__)))
+        tap_mysql = cli.utils.load_yaml(Path(__file__).parent / 'resources/tap-valid-mysql.yml')
 
         # Every tap should have catalog argument --properties or --catalog
         tap_catalog_argument = cli.utils.get_tap_property(tap_mysql, 'tap_catalog_argument')
@@ -303,14 +304,14 @@ class TestUtils:
         assert cli.utils.get_tap_property_by_tap_type('tap-mysql', 'default_replication_method') == 'LOG_BASED'
 
         # Kafka encoding and parameterised local_store_dir should be added as default extra config keys
-        tap_kafka = cli.utils.load_yaml('{}/resources/tap-valid-kafka.yml'.format(os.path.dirname(__file__)))
-        assert cli.utils.get_tap_extra_config_keys(tap_kafka, temp_dir='/my/temp/dir') == {
-            'local_store_dir': '/my/temp/dir',
+        tap_kafka = cli.utils.load_yaml(Path(__file__).parent / 'resources/tap-valid-kafka.yml')
+        assert cli.utils.get_tap_extra_config_keys(tap_kafka, temp_dir=Path('/my/temp/dir')) == {
+            'local_store_dir': Path('/my/temp/dir'),
             'encoding': 'utf-8'
         }
 
         # Snwoflake tables list should be added to tap_config_extras
-        tap_snowflake = cli.utils.load_yaml('{}/resources/tap-valid-snowflake.yml'.format(os.path.dirname(__file__)))
+        tap_snowflake = cli.utils.load_yaml(Path(__file__).parent / 'resources/tap-valid-snowflake.yml')
         assert cli.utils.get_tap_extra_config_keys(tap_snowflake) == {
             'tables': 'SCHEMA_1.TABLE_ONE,SCHEMA_1.TABLE_TWO'
         }
@@ -319,8 +320,8 @@ class TestUtils:
         """Test get tap and target yamls"""
         expected_tap_names = {'tap_test.yml', 'tap_2test.yml', 'tap_valid.yaml'}
         expected_target_names = {'target_test.yml'}
-        tap_names, target_names = cli.utils.get_tap_target_names(f'{os.path.dirname(__file__)}'
-                                                                 f'/resources/test_tap_target_names')
+        tap_names, target_names = cli.utils.get_tap_target_names(Path(__file__).parent /
+                                                                 'resources/test_tap_target_names')
 
         assert tap_names == expected_tap_names
         assert target_names == expected_target_names
@@ -328,30 +329,30 @@ class TestUtils:
     def test_create_temp_file(self):
         """Test temp files created at the right location"""
         # By default temp files should be created in system temp directory
-        temp_file = cli.utils.create_temp_file()[1]
+        temp_file = cli.utils.create_temp_file()
         assert os.path.isfile(temp_file)
         os.remove(temp_file)
 
         # Providing extra dir argument should create the target directory even if it's not exist
-        temp_file = cli.utils.create_temp_file(dir='./temp_dir_to_create_automatically/deep_temp_dir')[1]
+        temp_file = cli.utils.create_temp_file(dir=Path('./temp_dir_to_create_automatically/deep_temp_dir'))
         assert os.path.isfile(temp_file)
         os.remove(temp_file)
 
         # Providing dir, suffix and prefix arguments should create the target_directory with custom prefix and suffix
-        temp_file = cli.utils.create_temp_file(dir='./temp_dir_to_create_automatically/deep_temp_dir',
+        temp_file = cli.utils.create_temp_file(dir=Path('./temp_dir_to_create_automatically/deep_temp_dir'),
                                                suffix='.json',
-                                               prefix='pipelinewise_test_temp_file_')[1]
+                                               prefix='pipelinewise_test_temp_file_')
         assert os.path.isfile(temp_file)
         os.remove(temp_file)
 
     def test_find_errors_in_log_file(self):
         """Test reading the last n lines of a file"""
         # Should return an empty list if no error in the file
-        log_file = '{}/resources/sample_log_files/tap-run-no-errors.log'.format(os.path.dirname(__file__))
+        log_file = Path(__file__).parent / 'resources/sample_log_files/tap-run-no-errors.log'
         assert cli.utils.find_errors_in_log_file(log_file) == []
 
         # Should return the line with errors
-        log_file = '{}/resources/sample_log_files/tap-run-errors.log'.format(os.path.dirname(__file__))
+        log_file = Path(__file__).parent / 'resources/sample_log_files/tap-run-errors.log'
         assert cli.utils.find_errors_in_log_file(log_file) == \
                ['time=2020-07-15 11:24:43 logger_name=tap_postgres log_level=CRITICAL This is a critical error\n',
                 'time=2020-07-15 11:24:43 logger_name=tap_postgres log_level=EXCEPTION This is an exception\n',
@@ -370,7 +371,7 @@ class TestUtils:
                 'foo.error.FakeError: This is a test exception\n']
 
         # Should return the default max number of errors
-        log_file = '{}/resources/sample_log_files/tap-run-lot-of-errors.log'.format(os.path.dirname(__file__))
+        log_file = Path(__file__).parent / 'resources/sample_log_files/tap-run-lot-of-errors.log'
         assert cli.utils.find_errors_in_log_file(log_file) == \
                ['time=2020-07-15 11:24:43 logger_name=tap_postgres log_level=CRITICAL This is a critical error 1\n',
                 'time=2020-07-15 11:24:43 logger_name=tap_postgres log_level=CRITICAL This is a critical error 2\n',
@@ -384,13 +385,13 @@ class TestUtils:
                 'time=2020-07-15 11:24:43 logger_name=tap_postgres log_level=CRITICAL This is a critical error 10\n']
 
         # Should return the custom max number of errors
-        log_file = '{}/resources/sample_log_files/tap-run-lot-of-errors.log'.format(os.path.dirname(__file__))
+        log_file = Path(__file__).parent / 'resources/sample_log_files/tap-run-lot-of-errors.log'
         assert cli.utils.find_errors_in_log_file(log_file, max_errors=2) == \
                ['time=2020-07-15 11:24:43 logger_name=tap_postgres log_level=CRITICAL This is a critical error 1\n',
                 'time=2020-07-15 11:24:43 logger_name=tap_postgres log_level=CRITICAL This is a critical error 2\n']
 
         # Should return the custom max number of errors
-        log_file = '{}/resources/sample_log_files/tap-run-errors.log'.format(os.path.dirname(__file__))
+        log_file = Path(__file__).parent / 'resources/sample_log_files/tap-run-errors.log'
         assert cli.utils.find_errors_in_log_file(log_file, error_pattern=re.compile('CUSTOM-ERR-PATTERN')) == \
                ['CUSTOM-ERR-PATTERN: This is a custom pattern error message\n']
 

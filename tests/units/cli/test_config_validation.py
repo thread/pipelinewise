@@ -4,6 +4,7 @@ import time
 
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from pathlib import Path
 
 from pipelinewise.cli import commands
 
@@ -15,9 +16,9 @@ class TestConfigValidation(TestCase):
         commands.PARAMS_VALIDATION_RETRY_TIMES = 3
         self.sec_to_repair_json_file = 0.15  #: pylint: disable=attribute-defined-outside-init
         self.temp_dir = TemporaryDirectory()  #: pylint: disable=consider-using-with
-        self.invalid_json_file = f'{self.temp_dir.name}/invalid_file.json'
-        self.valid_json_file = f'{self.temp_dir.name}/valid_file.json'
-        self.empty_file = f'{self.temp_dir.name}/empty_file.json'
+        self.invalid_json_file = Path(f'{self.temp_dir.name}/invalid_file.json')
+        self.valid_json_file = Path(f'{self.temp_dir.name}/valid_file.json')
+        self.empty_file = Path(f'{self.temp_dir.name}/empty_file.json')
 
         with open(self.valid_json_file, 'w', encoding='utf-8') as valid_file:
             json.dump({'foo': 'bar'}, valid_file)
@@ -111,7 +112,7 @@ class TestConfigValidation(TestCase):
 
     def test_tap_config_json_valid_if_state_file_does_not_exist(self):
         """Test it is valid if state file does not exists at all"""
-        not_exists_state_file = f'{self.temp_dir.name}/not_exists.json'
+        not_exists_state_file = Path(f'{self.temp_dir.name}/not_exists.json')
         self._assert_tap_config(config=self.valid_json_file,
                                 properties=self.valid_json_file,
                                 state=not_exists_state_file)

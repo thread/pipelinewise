@@ -1,11 +1,12 @@
-import os
 import pytest
 
 from unittest import TestCase
+from pathlib import Path
+
 from pipelinewise import cli
 from pipelinewise.cli.errors import InvalidConfigException
 
-TAP_GITHUB_YAML = '{}/resources/tap-github.yml'.format(os.path.dirname(__file__))
+TAP_GITHUB_YAML = Path(__file__).parent / 'resources/tap-github.yml'
 
 
 # pylint: disable=no-self-use,too-many-public-methods,fixme
