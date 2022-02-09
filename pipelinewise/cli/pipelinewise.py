@@ -6,15 +6,17 @@ import signal
 import sys
 import json
 import copy
+import tempfile
 import psutil
 import pidfile
 
 from datetime import datetime
 from time import time
-from typing import Dict, Optional, List, Any, Tuple, cast
+from typing import Dict, Optional, List, Any, Tuple
 from joblib import Parallel, delayed, parallel_backend
 from tabulate import tabulate
 from pathlib import Path
+from pathy import FluidPath, Pathy
 
 from . import utils
 from .constants import ConnectorType
@@ -66,7 +68,7 @@ class PipelineWise:
 
     TRANSFORM_FIELD_CONNECTOR_NAME = 'transform-field'
 
-    def __init__(self, args: Any, config_dir: Path, venv_dir: Path, profiling_dir: Optional[Path] = None) -> None:
+    def __init__(self, args: Any, config_dir: FluidPath, venv_dir: Path, profiling_dir: Optional[Path] = None) -> None:
 
         self.profiling_mode = args.profiler
         self.profiling_dir = profiling_dir
@@ -127,7 +129,7 @@ class PipelineWise:
 
         return stats
 
-    def create_consumable_target_config(self, target_config: Path, tap_inheritable_config: Path) -> Path:
+    def create_consumable_target_config(self, target_config: FluidPath, tap_inheritable_config: FluidPath) -> FluidPath:
         """
         Create consumable target config by appending "inheritable" config to the common target config
         """
@@ -367,6 +369,8 @@ class PipelineWise:
         """
         Returns the tap specific temp directory
         """
+        if isinstance(self.config_dir, Pathy):
+            return tempfile.gettempdir()
         return self.config_dir / 'tmp'
 
     def get_tap_dir(self, target_id: str, tap_id: str) -> Path:
@@ -754,7 +758,7 @@ class PipelineWise:
             project_dir.mkdir(parents=True)
         except FileExistsError:
             self.logger.exception('Directory exists and cannot create new project: %s', self.args.name)
-            raise sys.exit(1)
+            sys.exit(1)
 
         for yaml in sorted(utils.get_sample_file_paths()):
             dst = project_dir / yaml.name
@@ -782,15 +786,22 @@ class PipelineWise:
 
         # Generate and run the command to run the tap directly
         # We will use the discover option to test connection
-        tap_config = self.tap['files']['config']
-        command = f'{self.tap_bin} --config {tap_config} --discover'
+        tmp_tap_config = utils.copy_path_to_local_tmp(self.tap['files']['config'])
+        command = f'{self.tap_bin} --config {tmp_tap_config} --discover'
 
         if self.profiling_mode:
-            profiling_dir = cast(Path, self.profiling_dir)
-            dump_file = profiling_dir / f'tap_{tap_id}.pstat'
+            dump_file = utils.create_temp_file()
             command = f'{self.tap_python_bin} -m cProfile -o {dump_file} {command}'
 
-        result = commands.run_command(command)
+        try:
+            result = commands.run_command(command)
+        finally:
+            # Clean up temp file.
+            tmp_tap_config.unlink()
+
+            # Move profiling file to the expected (potentially remote) location.
+            if self.profiling_mode:
+                dump_file.replace(self.profiling_dir / f'tap_{tap_id}.pstat')
 
         # Get output and errors from tap
         # pylint: disable=unused-variable
@@ -814,7 +825,7 @@ class PipelineWise:
             )
 
     # pylint: disable=too-many-locals,inconsistent-return-statements
-    def discover_tap(self, tap: Optional[str] = None, target: Optional[str] = None) -> Optional[str]:
+    def discover_tap(self, tap: Optional[Dict] = None, target: Optional[Dict] = None) -> Optional[str]:
         """
         Run a specific tap in discovery mode. Discovery mode is connecting to the data source
         and collecting information that is required for running the tap.
@@ -846,16 +857,24 @@ class PipelineWise:
         )
 
         # Generate and run the command to run the tap directly
-        command = f'{tap_bin} --config {tap_config_file} --discover'
+        tmp_tap_config_file = utils.copy_path_to_local_tmp(tap_config_file)
+        command = f'{tap_bin} --config {tmp_tap_config_file} --discover'
 
         if self.profiling_mode:
-            profiling_dir = cast(Path, self.profiling_dir)
-            dump_file = profiling_dir / f'tap_{tap_id}.pstat'
+            dump_file = utils.create_temp_file()
             command = f'{tap_python_bin} -m cProfile -o {dump_file} {command}'
 
         self.logger.debug('Discovery command: %s', command)
 
-        result = commands.run_command(command)
+        try:
+            result = commands.run_command(command)
+        finally:
+            # Clean up temporary file.
+            tmp_tap_config_file.unlink()
+
+            # Move profiling file to the expected (potentially remote) location.
+            if self.profiling_mode:
+                dump_file.replace(self.profiling_dir / f'tap_{tap_id}.pstat')
 
         # Get output and errors from tap
         # pylint: disable=unused-variable
@@ -1002,15 +1021,24 @@ class PipelineWise:
         """
         Generate and run piped shell command to sync tables using singer taps and targets
         """
+        # Deal with the possibility of remote files which taps and targets may not support.
+        local_tmp_tap = utils.copy_params_to_local_tmp(tap)
+        local_tmp_target = utils.copy_params_to_local_tmp(target)
+        local_tmp_transform = utils.copy_params_to_local_tmp(transform)
+
+        local_tmp_profiling_dir = None
+        if self.profiling_mode:
+            local_tmp_profiling_dir = Path(tempfile.mkdtemp())
+
         # Build the piped executable command
         command = commands.build_singer_command(
-            tap=tap,
-            target=target,
-            transform=transform,
+            tap=local_tmp_tap,
+            target=local_tmp_target,
+            transform=local_tmp_transform,
             stream_buffer_size=stream_buffer_size,
             stream_buffer_log_file=self.tap_run_log_file,
             profiling_mode=self.profiling_mode,
-            profiling_dir=self.profiling_dir,
+            profiling_dir=local_tmp_profiling_dir,
         )
 
         # Do not run if another instance is already running
@@ -1025,6 +1053,8 @@ class PipelineWise:
                 log_dir,
             )
             sys.exit(1)
+        # Acquire the lock as early as possible.
+        utils.log_file_with_status(self.tap_run_log_file, utils.STATUS_RUNNING).touch()
 
         start = None
         state = None
@@ -1057,18 +1087,30 @@ class PipelineWise:
             sys.stdout.write(line)
             return update_state_file(line)
 
-        # Run command with update_state_file as a callback to call for every stdout line
-        if self.extra_log:
-            commands.run_command(
-                command, self.tap_run_log_file, update_state_file_with_extra_log
-            )
-        else:
-            commands.run_command(command, self.tap_run_log_file, update_state_file)
+        try:
+            # Run command with update_state_file as a callback to call for every stdout line
+            if self.extra_log:
+                commands.run_command(
+                    command, self.tap_run_log_file, update_state_file_with_extra_log
+                )
+            else:
+                commands.run_command(command, self.tap_run_log_file, update_state_file)
+        finally:
+            # Move the temporary profiling file to the provided one.
+            if self.profiling_mode:
+                for file in local_tmp_profiling_dir.iterdir():
+                    file.replace(self.profiling_dir / file.name)
+
+            # Clean up other temp files if they exist.
+            utils.clean_up_params(local_tmp_tap)
+            utils.clean_up_params(local_tmp_target)
+            utils.clean_up_params(local_tmp_transform)
 
         # update the state file one last time to make sure it always has the last state message.
         if state is not None:
             with tap.state.open('w', encoding='utf-8') as statefile:
                 statefile.write(state)
+
 
     def run_tap_fastsync(
         self, tap: TapParams, target: TargetParams, transform: TransformParams
@@ -1076,16 +1118,25 @@ class PipelineWise:
         """
         Generating and running shell command to sync tables using the native fastsync components
         """
+        # Deal with the possibility of remote files which taps and targets may not support.
+        local_tmp_tap = utils.copy_params_to_local_tmp(tap)
+        local_tmp_target = utils.copy_params_to_local_tmp(target)
+        local_tmp_transform = utils.copy_params_to_local_tmp(transform)
+
+        local_tmp_profiling_dir = None
+        if self.profiling_mode:
+            local_tmp_profiling_dir = Path(tempfile.mkdtemp())
+
         # Build the fastsync executable command
         command = commands.build_fastsync_command(
-            tap=tap,
-            target=target,
-            transform=transform,
+            tap=local_tmp_tap,
+            target=local_tmp_target,
+            transform=local_tmp_transform,
             venv_dir=self.venv_dir,
             temp_dir=self.get_temp_dir(),
             tables=self.args.tables,
             profiling_mode=self.profiling_mode,
-            profiling_dir=self.profiling_dir,
+            profiling_dir=local_tmp_profiling_dir,
             drop_pg_slot=self.drop_pg_slot,
         )
 
@@ -1101,6 +1152,8 @@ class PipelineWise:
                 log_dir,
             )
             sys.exit(1)
+        # Acquire lock as early as possible.
+        utils.log_file_with_status(self.tap_run_log_file, utils.STATUS_RUNNING).touch()
 
         # Fastsync is running in subprocess.
         # Collect the formatted logs and log it in the main PipelineWise process as well
@@ -1109,14 +1162,25 @@ class PipelineWise:
             sys.stdout.write(line)
             return line
 
-        if self.extra_log:
-            # Run command and copy fastsync output to main logger
-            commands.run_command(
-                command, self.tap_run_log_file, add_fastsync_output_to_main_logger
-            )
-        else:
-            # Run command
-            commands.run_command(command, self.tap_run_log_file)
+        try:
+            if self.extra_log:
+                # Run command and copy fastsync output to main logger
+                commands.run_command(
+                    command, self.tap_run_log_file, add_fastsync_output_to_main_logger
+                )
+            else:
+                # Run command
+                commands.run_command(command, self.tap_run_log_file)
+        finally:
+            # Move the temporary profiling file to the provided one.
+            if self.profiling_mode:
+                for file in local_tmp_profiling_dir.iterdir():
+                    file.replace(self.profiling_dir / file.name)
+
+            # Clean up other temp files if they exist.
+            utils.clean_up_params(local_tmp_tap)
+            utils.clean_up_params(local_tmp_target)
+            utils.clean_up_params(local_tmp_transform)
 
     # pylint: disable=too-many-statements,too-many-locals
     def run_tap(self) -> None:
@@ -1782,7 +1846,7 @@ TAP RUN SUMMARY
             pass
 
     def __validate_transformations(
-        self, transformation_file: Path, catalog: Dict, tap_id: str, target_id: str
+        self, transformation_file: FluidPath, catalog: Dict, tap_id: str, target_id: str
     ) -> Optional[str]:
         """
         Run validation of transformation config
@@ -1802,20 +1866,30 @@ TAP RUN SUMMARY
                 dir=self.get_temp_dir(), prefix='properties_', suffix='.json'
             )
 
+            temp_transformation_file = utils.copy_path_to_local_tmp(transformation_file)
+
             utils.save_json(catalog, temp_catalog_file)
 
             command = f"""
-                {self.transform_field_bin} --validate --config {transformation_file} --catalog {temp_catalog_file}
+                {self.transform_field_bin} --validate --config {temp_transformation_file} --catalog {temp_catalog_file}
                 """
 
             if self.profiling_mode:
-                profiling_dir = cast(Path, self.profiling_dir)
-                dump_file = profiling_dir / f'transformation_{tap_id}_{target_id}.pstat'
+                dump_file = utils.create_temp_file()
                 command = f'{self.transform_field_python_bin} -m cProfile -o {dump_file} {command}'
 
             self.logger.debug('Transformation validation command: %s', command)
 
-            result = commands.run_command(command)
+            try:
+                result = commands.run_command(command)
+            finally:
+                # Move the temporary profiling file to the provided one.
+                if self.profiling_mode:
+                    dump_file.replace(self.profiling_dir / f'transformation_{tap_id}_{target_id}.pstat')
+
+                # Clean up temp files.
+                temp_catalog_file.unlink()
+                temp_transformation_file.unlink()
 
             # Get output and errors from command
             returncode, _, stderr = result

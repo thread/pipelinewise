@@ -358,7 +358,9 @@ class TestCli:
         tap_one_catalog = cli.utils.load_json(
             Path(__file__).parent / 'resources/sample_json_config/target_one/tap_one/properties.json'
         )
-        tap_one_selection_file = Path(__file__).parent / 'resources/sample_json_config/target_one/tap_one/selection.json'
+        tap_one_selection_file = (
+            Path(__file__).parent / 'resources/sample_json_config/target_one/tap_one/selection.json'
+        )
 
         # Update catalog selection
         tap_one_with_selection = self.pipelinewise.make_default_selection(
@@ -663,7 +665,9 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
 
     def test_validate_command_1(self):
         """Test validate command should fail because of missing replication key for incremental"""
-        test_validate_command_dir = Path(__file__).parent / 'resources/test_validate_command/missing_replication_key_incremental'
+        test_validate_command_dir = (
+            Path(__file__).parent / 'resources/test_validate_command/missing_replication_key_incremental'
+        )
 
         args = CliArgs(dir=test_validate_command_dir)
         pipelinewise = PipelineWise(args, CONFIG_DIR, VIRTUALENVS_DIR)
@@ -692,7 +696,9 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
 
     def test_validate_command_4(self):
         """Test validate command should fail because of duplicate targets"""
-        test_validate_command_dir = Path(__file__).parent / 'resources/test_validate_command/test_yaml_config_two_targets'
+        test_validate_command_dir = (
+            Path(__file__).parent / 'resources/test_validate_command/test_yaml_config_two_targets'
+        )
 
         args = CliArgs(dir=test_validate_command_dir)
         pipelinewise = PipelineWise(args, CONFIG_DIR, VIRTUALENVS_DIR)
@@ -705,7 +711,9 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
         Test validate command should fail because of transformation on json properties for a tap-target combo that
         has Fastsync
         """
-        test_validate_command_dir = Path(__file__).parent / 'resources/test_validate_command/json_transformation_in_fastsync'
+        test_validate_command_dir = (
+            Path(__file__).parent / 'resources/test_validate_command/json_transformation_in_fastsync'
+        )
 
         args = CliArgs(dir=test_validate_command_dir)
         pipelinewise = PipelineWise(args, CONFIG_DIR, VIRTUALENVS_DIR)
@@ -722,15 +730,17 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
 
         tap_pk_required = cli.utils.load_json(test_files_dir / 'tap_config_pk_required.json')
         tap_pk_not_required = cli.utils.load_json(test_files_dir / 'tap_config_pk_not_required.json')
-        tap_pk_not_defined = cli.utils.load_json(test_files_dir / 'tap_config_pk_not_defined.json'.format(test_files_dir)
-        )
-        tap_with_pk = cli.utils.load_json(test_files_dir / 'tap_properties_with_pk.json'.format(test_files_dir)
-        )
+        tap_pk_not_defined = cli.utils.load_json(test_files_dir / 'tap_config_pk_not_defined.json')
+        tap_with_pk = cli.utils.load_json(test_files_dir / 'tap_properties_with_pk.json')
         tap_with_no_pk_full_table = cli.utils.load_json(test_files_dir / 'tap_properties_with_no_pk_full_table.json')
         tap_with_no_pk_incremental = cli.utils.load_json(test_files_dir / 'tap_properties_with_no_pk_incremental.json')
         tap_with_no_pk_log_based = cli.utils.load_json(test_files_dir / 'tap_properties_with_no_pk_log_based.json')
-        tap_with_no_pk_not_selected = cli.utils.load_json(test_files_dir / 'tap_properties_with_no_pk_not_selected.json')
+        tap_with_no_pk_not_selected = (
+            cli.utils.load_json(test_files_dir / 'tap_properties_with_no_pk_not_selected.json')
+        )
 
+        tmp_transformation = Path('transformations.json')
+        tmp_transformation.touch(exist_ok=True)
         with patch(
             'pipelinewise.cli.pipelinewise.commands.run_command'
         ) as run_command_mock:
@@ -861,3 +871,4 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
             )
 
             assert run_command_mock.call_count == 4
+        tmp_transformation.unlink()

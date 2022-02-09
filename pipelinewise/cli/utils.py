@@ -13,6 +13,7 @@ import tempfile
 import warnings
 import jsonschema
 import yaml
+import uuid
 
 from io import StringIO
 from datetime import date, datetime
@@ -25,7 +26,10 @@ from ansible.parsing.vault import VaultLib, get_file_vault_secret, is_encrypted_
 from ansible.parsing.yaml.loader import AnsibleLoader
 from ansible.parsing.yaml.objects import AnsibleMapping, AnsibleVaultEncryptedUnicode
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from pathy import BasePath, FluidPath, Pathy
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
+
+from pipelinewise.cli.commands import TapParams, TargetParams, TransformParams
 
 from . import tap_properties
 from .errors import InvalidConfigException
@@ -57,7 +61,7 @@ class AnsibleJSONEncoder(json.JSONEncoder):
         elif isinstance(o, (date, datetime)):
             # date object
             value = o.isoformat()
-        elif isinstance(o, Path):
+        elif isinstance(o, (Path, BasePath)):
             value = str(o)
         else:
             # use default encoder
@@ -76,10 +80,11 @@ def is_json(stringss: str) -> bool:
     return True
 
 
-def is_json_file(path: Path) -> bool:
+def is_json_file(path: FluidPath) -> bool:
     """
     Detects if a file is a valid json file or not
     """
+    path = Pathy.fluid(path)
     try:
         if path.is_file():
             with path.open(encoding='utf-8') as jsonfile:
@@ -90,10 +95,11 @@ def is_json_file(path: Path) -> bool:
         return False
 
 
-def load_json(path: Path) -> Optional[Any]:
+def load_json(path: FluidPath) -> Optional[Any]:
     """
     Deserialize JSON file to python object
     """
+    path = Pathy.fluid(path)
     try:
         LOGGER.debug('Parsing file at %s', path)
         if path.is_file():
@@ -117,10 +123,11 @@ def is_state_message(line: str) -> bool:
         return False
 
 
-def save_json(data: Any, path: Path) -> None:
+def save_json(data: Any, path: FluidPath) -> None:
     """
     Serializes and saves any data structure to JSON files
     """
+    path = Pathy.fluid(path)
     try:
         LOGGER.debug('Saving JSON %s', path)
         with path.open('w', encoding='utf-8') as jsonfile:
@@ -322,7 +329,7 @@ def delete_keys_from_dict(dic, keys):
     }
 
 
-def silentremove(path: Path) -> None:
+def silentremove(path: FluidPath) -> None:
     """
     Deleting file with no error message if the file not exists
     """
@@ -337,11 +344,12 @@ def silentremove(path: Path) -> None:
 
 
 def search_files(
-    search_dir: Path, patterns: Optional[List[str]] = None, sort: bool = False, abs_path: bool = False
-) -> List[Path]:
+    search_dir: FluidPath, patterns: Optional[List[str]] = None, sort: bool = False, abs_path: bool = False
+) -> List[FluidPath]:
     """
     Searching files in a specific directory that match a pattern
     """
+    search_dir = Pathy.fluid(search_dir)
     if patterns is None:
         patterns = ['*']
 
@@ -358,11 +366,12 @@ def search_files(
     return [path if not abs_path else path.absolute() for path in p_files]
 
 
-def extract_log_attributes(log_file: Path) -> Dict[str, Any]:
+def extract_log_attributes(log_file: FluidPath) -> Dict[str, Any]:
     """
     Extracting common properties from a log file name
     """
     LOGGER.debug('Extracting attributes from log file %s', log_file)
+    log_file = Pathy.fluid(log_file)
     target_id = 'unknown'
     tap_id = 'unknown'
     timestamp = datetime.utcfromtimestamp(0).isoformat()
@@ -371,7 +380,7 @@ def extract_log_attributes(log_file: Path) -> Dict[str, Any]:
 
     try:
         # Extract attributes from log file name
-        log_attr = re.search(r'(.*)-(.*)-(.*)\.(.*)\.log\.(.*)', str(log_file))
+        log_attr = re.search(r'(.*)-(.*)-(.*)\.(.*)\.log\.(.*)', log_file.name)
         target_id = log_attr.group(1)
         tap_id = log_attr.group(2)
         timestamp = datetime.strptime(log_attr.group(3), '%Y%m%d_%H%M%S').isoformat()
@@ -384,7 +393,7 @@ def extract_log_attributes(log_file: Path) -> Dict[str, Any]:
 
     # Return as a dictionary
     return {
-        'filename': log_file,
+        'filename': str(log_file),
         'target_id': target_id,
         'tap_id': tap_id,
         'timestamp': timestamp,
@@ -393,7 +402,7 @@ def extract_log_attributes(log_file: Path) -> Dict[str, Any]:
     }
 
 
-def get_tap_property(tap: str, property_key: str, temp_dir: Optional[Path] = None) -> Any:
+def get_tap_property(tap: str, property_key: str, temp_dir: Optional[FluidPath] = None) -> Any:
     """
     Get a tap specific property value
     """
@@ -416,7 +425,7 @@ def get_tap_property_by_tap_type(tap_type: str, property_key: str) -> Any:
     return tap_props.get(property_key)
 
 
-def get_tap_extra_config_keys(tap: str, temp_dir: Optional[Path] = None) -> Any:
+def get_tap_extra_config_keys(tap: str, temp_dir: Optional[FluidPath] = None) -> Any:
     """
     Get tap extra config property
     """
@@ -488,18 +497,23 @@ def get_pipelinewise_python_bin(venv_dir: Path) -> str:
 
 # pylint: disable=redefined-builtin
 def create_temp_file(
-    suffix: Optional[str] = None, prefix: Optional[str] = None, dir: Optional[Path] = None, text: Optional[str] = None
-) -> Path:
+    suffix: Optional[str] = None, prefix: Optional[str] = None, dir: Optional[FluidPath] = None,
+) -> FluidPath:
     """
     Create temp file with parent directories if not exists
     """
     if dir:
         dir.mkdir(parents=True, exist_ok=True)
-    _, temp_file = tempfile.mkstemp(suffix, prefix, dir, text)
-    return Path(temp_file)
+
+    if isinstance(dir, Pathy):
+        temp_file = dir / f'{prefix}{uuid.uuid4()}{suffix}'
+        temp_file.touch()
+    else:
+        _, temp_file = tempfile.mkstemp(suffix, prefix, dir)
+    return Pathy.fluid(temp_file)
 
 
-def find_errors_in_log_file(file: Path, max_errors: int = 10, error_pattern: str = None) -> List[str]:
+def find_errors_in_log_file(file: FluidPath, max_errors: int = 10, error_pattern: str = None) -> List[str]:
     """
     Find error lines in a log file
 
@@ -565,7 +579,7 @@ def generate_random_string(length: int = 8) -> str:
     )
 
 
-def log_file_with_status(log_file: Path, status: str) -> Path:
+def log_file_with_status(log_file: FluidPath, status: str) -> FluidPath:
     """
     Adds an extension to a log file that represents the
     actual status of the tap
@@ -578,3 +592,39 @@ def log_file_with_status(log_file: Path, status: str) -> Path:
         Path object pointing to log file with status extension
     """
     return log_file.with_suffix(log_file.suffix + '.' + status)
+
+
+def copy_path_to_local_tmp(path: FluidPath) -> Path:
+    """
+    Copies a potentially remote file to a temporary file on the local filesystem.
+    """
+    tmp = create_temp_file()
+    tmp.write_bytes(Pathy.fluid(path).read_bytes())
+    return tmp
+
+
+def copy_params_to_local_tmp(
+    obj: Union[TapParams, TargetParams, TransformParams]
+) -> Union[TapParams, TargetParams, TransformParams]:
+    """
+    Creates a copy of the parameter class with all files having been copied to
+    local temp files.
+    """
+    obj_dict = obj.asdict()
+    for value in obj_dict.values():
+        # Make temporary copies of all the files to pass to the tap/target/transform.
+        if isinstance(value, Path):
+            value = copy_path_to_local_tmp(Pathy.fluid(value))
+    return obj.__class__(**obj_dict)
+
+
+def clean_up_params(obj: Union[TapParams, TargetParams, TransformParams]) -> None:
+    """
+    Deletes all files which a parameter class points to. Only use the function on
+    objects created by `copy_params_to_local_tmp`.
+    """
+    obj_dict = obj.asdict()
+    for value in obj_dict.values():
+        # Make temporary copies of all the files to pass to the tap/target/transform.
+        if isinstance(value, Path):
+            Pathy.fluid(value).unlink()

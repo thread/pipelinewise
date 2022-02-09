@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass
 from subprocess import PIPE, STDOUT, Popen
 from pathlib import Path
+from pathy import FluidPath
 from typing import cast, Optional
 
 from . import utils
@@ -25,7 +26,7 @@ PARAMS_VALIDATION_RETRY_PERIOD_SEC = 2
 PARAMS_VALIDATION_RETRY_TIMES = 3
 
 
-def _verify_json_file(json_file_path: Path, file_must_exists: bool, allowed_empty: bool) -> bool:
+def _verify_json_file(json_file_path: FluidPath, file_must_exists: bool, allowed_empty: bool) -> bool:
     """Checking if input file is a valid json or not, in some cases it is allowed to have an empty file,
      or it is allowed file not exists!
     """
@@ -40,7 +41,7 @@ def _verify_json_file(json_file_path: Path, file_must_exists: bool, allowed_empt
     return True
 
 
-def do_json_conf_validation(json_file: Path, file_property: dict) -> bool:
+def do_json_conf_validation(json_file: FluidPath, file_property: dict) -> bool:
     """
     Validating a json format config property and retry if it is invalid
     """
@@ -63,9 +64,9 @@ class TapParams:
     type: str
     bin: Path
     python_bin: Path
-    config: Path
-    properties: Path
-    state: Path
+    config: FluidPath
+    properties: FluidPath
+    state: FluidPath
 
     def __post_init__(self):
         if not self.config:
@@ -98,14 +99,12 @@ class TargetParams:
     type: str
     bin: Path
     python_bin: Path
-    config: Path
+    config: FluidPath
 
     def __post_init__(self):
-        json_file = self.config
-
         valid_json = do_json_conf_validation(
-            json_file=json_file,
-            file_property={'file_must_exists': True, 'allowed_empty': False}) if json_file else False
+            json_file=self.config,
+            file_property={'file_must_exists': True, 'allowed_empty': False}) if self.config else False
 
         if not valid_json:
             raise RunCommandException(f'Invalid json file for config: {self.config}')
@@ -116,7 +115,7 @@ class TransformParams:
     """TransformParams."""
     bin: Path
     python_bin: Path
-    config: Path
+    config: FluidPath
     tap_id: str
     target_id: str
 

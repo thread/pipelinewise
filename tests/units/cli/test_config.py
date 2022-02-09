@@ -115,11 +115,17 @@ class TestConfig:
                         },
                         'files': {
                             'config': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/config.json',
-                            'inheritable_config': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/inheritable_config.json',
+                            'inheritable_config': (
+                                PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/inheritable_config.json'
+                            ),
                             'properties': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/properties.json',
-                            'selection': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/selection.json',
+                            'selection': (
+                                PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/selection.json'
+                            ),
                             'state': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/state.json',
-                            'transformation': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/transformation.json',
+                            'transformation': (
+                                PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/transformation.json'
+                            ),
                             'pidfile': PIPELINEWISE_TEST_HOME / 'test_snowflake_target/mysql_sample/pipelinewise.pid',
                         },
                         'schemas': [
