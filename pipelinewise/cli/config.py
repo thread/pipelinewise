@@ -148,13 +148,13 @@ class Config:
         Returns the absolute paths of a tap/target configuration files
         """
         return {
-            'config': connector_dir / 'config.json',
-            'inheritable_config': connector_dir / 'inheritable_config.json',
-            'properties': connector_dir / 'properties.json',
-            'state': connector_dir / 'state.json',
-            'transformation': connector_dir / 'transformation.json',
-            'selection': connector_dir / 'selection.json',
-            'pidfile': connector_dir / 'pipelinewise.pid',
+            'config': connector_dir.absolute() / 'config.json',
+            'inheritable_config': connector_dir.absolute() / 'inheritable_config.json',
+            'properties': connector_dir.absolute() / 'properties.json',
+            'state': connector_dir.absolute() / 'state.json',
+            'transformation': connector_dir.absolute() / 'transformation.json',
+            'selection': connector_dir.absolute() / 'selection.json',
+            'pidfile': connector_dir.absolute() / 'pipelinewise.pid',
         }
 
     def save(self) -> None:
