@@ -1054,6 +1054,7 @@ class PipelineWise:
             )
             sys.exit(1)
         # Acquire the lock as early as possible.
+        self.tap_run_log_file.parent.mkdir(parents=True, exist_ok=True)
         utils.log_file_with_status(self.tap_run_log_file, utils.STATUS_RUNNING).touch()
 
         start = None
@@ -1152,6 +1153,7 @@ class PipelineWise:
             )
             sys.exit(1)
         # Acquire lock as early as possible.
+        self.tap_run_log_file.parent.mkdir(parents=True, exist_ok=True)
         utils.log_file_with_status(self.tap_run_log_file, utils.STATUS_RUNNING).touch()
 
         # Fastsync is running in subprocess.
