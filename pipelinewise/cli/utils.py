@@ -131,6 +131,7 @@ def save_json(data: Any, path: FluidPath) -> None:
     path = Pathy.fluid(path)
     try:
         LOGGER.debug('Saving JSON %s', path)
+        path.parent.mkdir(parents=True, exist_ok=True)
         with path.open('w', encoding='utf-8') as jsonfile:
             json.dump(
                 data, jsonfile, cls=AnsibleJSONEncoder, indent=4, sort_keys=True
