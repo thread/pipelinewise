@@ -10,7 +10,9 @@ import time
 from dataclasses import dataclass
 from subprocess import PIPE, STDOUT, Popen
 from pathlib import Path
+from pathy import FluidPath
 from typing import cast, Optional
+
 
 from . import utils
 from .errors import StreamBufferTooLargeException
@@ -25,7 +27,7 @@ PARAMS_VALIDATION_RETRY_PERIOD_SEC = 2
 PARAMS_VALIDATION_RETRY_TIMES = 3
 
 
-def _verify_json_file(json_file_path: Path, file_must_exists: bool, allowed_empty: bool) -> bool:
+def _verify_json_file(json_file_path: FluidPath, file_must_exists: bool, allowed_empty: bool) -> bool:
     """Checking if input file is a valid json or not, in some cases it is allowed to have an empty file,
      or it is allowed file not exists!
     """
@@ -40,7 +42,7 @@ def _verify_json_file(json_file_path: Path, file_must_exists: bool, allowed_empt
     return True
 
 
-def do_json_conf_validation(json_file: Path, file_property: dict) -> bool:
+def do_json_conf_validation(json_file: FluidPath, file_property: dict) -> bool:
     """
     Validating a json format config property and retry if it is invalid
     """
@@ -63,9 +65,9 @@ class TapParams:
     type: str
     bin: Path
     python_bin: Path
-    config: Path
-    properties: Path
-    state: Path
+    config: FluidPath
+    properties: FluidPath
+    state: FluidPath
 
     def __post_init__(self):
         if not self.config:
@@ -98,7 +100,7 @@ class TargetParams:
     type: str
     bin: Path
     python_bin: Path
-    config: Path
+    config: FluidPath
 
     def __post_init__(self):
         json_file = self.config
@@ -116,7 +118,7 @@ class TransformParams:
     """TransformParams."""
     bin: Path
     python_bin: Path
-    config: Path
+    config: FluidPath
     tap_id: str
     target_id: str
 
@@ -176,9 +178,12 @@ def build_tap_command(
 
     state_arg = ''
     if tap.state and tap.state.is_file():
-        state_arg = f'--state {tap.state}'
+        state_arg = f'--state {utils.ensure_local_file(tap.state)}'
 
-    tap_command = f'{tap.bin} --config {tap.config} {catalog_argument} {tap.properties} {state_arg}'
+    tap_command = (
+        f'{tap.bin} --config {utils.ensure_local_file(tap.config)} '
+        f'{catalog_argument} {utils.ensure_local_file(tap.properties)} {state_arg}'
+    )
 
     if profiling_mode:
         profiling_dir = cast(Path, profiling_dir)
@@ -203,7 +208,7 @@ def build_target_command(
         string of command line executable
     """
 
-    target_command = f'{target.bin} --config {target.config}'
+    target_command = f'{target.bin} --config {utils.ensure_local_file(target.config)}'
 
     if profiling_mode:
         profiling_dir = cast(Path, profiling_dir)
@@ -236,7 +241,7 @@ def build_transformation_command(
     if transform.config.is_file():
         trans = utils.load_json(transform.config)
         if 'transformations' in trans and len(trans['transformations']) > 0:
-            trans_command = f'{transform.bin} --config {transform.config}'
+            trans_command = f'{transform.bin} --config {utils.ensure_local_file(transform.config)}'
 
             if profiling_mode:
                 profiling_dir = cast(Path, profiling_dir)
@@ -391,12 +396,12 @@ def build_fastsync_command(
             filter(
                 None,
                 [
-                    f'--tap {tap.config}',
-                    f'--properties {tap.properties}',
-                    f'--state {tap.state}',
-                    f'--target {target.config}',
+                    f'--tap {utils.ensure_local_file(tap.config)}',
+                    f'--properties {utils.ensure_local_file(tap.properties)}',
+                    f'--state {utils.ensure_local_file(tap.state)}',
+                    f'--target {utils.ensure_local_file(target.config)}',
                     f'--temp_dir {temp_dir}',
-                    f'--transform {transform.config}'
+                    f'--transform {utils.ensure_local_file(transform.config)}'
                     if transform.config and transform.config.is_file()
                     else '',
                     f'--tables {tables}' if tables else '',

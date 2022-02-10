@@ -11,10 +11,11 @@ import pidfile
 
 from datetime import datetime
 from time import time
-from typing import Dict, Optional, List, Any, Tuple, cast
+from typing import Dict, Optional, List, Any, Tuple
 from joblib import Parallel, delayed, parallel_backend
 from tabulate import tabulate
 from pathlib import Path
+from pathy import FluidPath, Pathy, use_fs_cache
 
 from . import utils
 from .constants import ConnectorType
@@ -80,6 +81,7 @@ class PipelineWise:
         self.config_path = self.config_dir / 'config.json'
         self.load_config()
         self.alert_sender = AlertSender(self.config.get('alert_handlers'))
+        self.local_cache = use_fs_cache()
 
         if args.tap is not None:
             self.tap = self.get_tap(args.target, args.tap)
@@ -782,15 +784,20 @@ class PipelineWise:
 
         # Generate and run the command to run the tap directly
         # We will use the discover option to test connection
-        tap_config = self.tap['files']['config']
+        tap_config = utils.ensure_local_file(self.tap['files']['config'])
         command = f'{self.tap_bin} --config {tap_config} --discover'
 
         if self.profiling_mode:
-            profiling_dir = cast(Path, self.profiling_dir)
+            profiling_dir = utils.ensure_local_file(self.profiling_dir)
             dump_file = profiling_dir / f'tap_{tap_id}.pstat'
             command = f'{self.tap_python_bin} -m cProfile -o {dump_file} {command}'
 
-        result = commands.run_command(command)
+        try:
+            result = commands.run_command(command)
+        finally:
+            if self.profiling_mode:
+                # Move the local cache to the desired location.
+                (Pathy.fluid(self.profiling_dir) / dump_file.name).write_bytes(dump_file.read_bytes())
 
         # Get output and errors from tap
         # pylint: disable=unused-variable
@@ -827,9 +834,9 @@ class PipelineWise:
         # Define tap props
         tap_id = tap.get('id')
         tap_type = tap.get('type')
-        tap_config_file = tap.get('files', {}).get('config')
-        tap_properties_file = tap.get('files', {}).get('properties')
-        tap_selection_file = tap.get('files', {}).get('selection')
+        tap_config_file = tap['files']['config']
+        tap_properties_file = tap['files']['properties']
+        tap_selection_file = tap['files']['selection']
         tap_bin = self.get_connector_bin(tap_type)
         tap_python_bin = self.get_connector_python_bin(tap_type)
 
@@ -846,16 +853,21 @@ class PipelineWise:
         )
 
         # Generate and run the command to run the tap directly
-        command = f'{tap_bin} --config {tap_config_file} --discover'
+        command = f'{tap_bin} --config {utils.ensure_local_file(tap_config_file)} --discover'
 
         if self.profiling_mode:
-            profiling_dir = cast(Path, self.profiling_dir)
+            profiling_dir = utils.ensure_local_file(self.profiling_dir)
             dump_file = profiling_dir / f'tap_{tap_id}.pstat'
             command = f'{tap_python_bin} -m cProfile -o {dump_file} {command}'
 
         self.logger.debug('Discovery command: %s', command)
 
-        result = commands.run_command(command)
+        try:
+            result = commands.run_command(command)
+        finally:
+            if self.profiling_mode:
+                # Move the local cache to the desired location.
+                (Pathy.fluid(self.profiling_dir) / dump_file.name).write_bytes(dump_file.read_bytes())
 
         # Get output and errors from tap
         # pylint: disable=unused-variable
@@ -1002,6 +1014,11 @@ class PipelineWise:
         """
         Generate and run piped shell command to sync tables using singer taps and targets
         """
+        # Get local version of remote files or no-op if local.
+        local_profiling_dir = None
+        if self.profiling_mode:
+            local_profiling_dir = utils.ensure_local_file(self.profiling_dir)
+
         # Build the piped executable command
         command = commands.build_singer_command(
             tap=tap,
@@ -1010,7 +1027,7 @@ class PipelineWise:
             stream_buffer_size=stream_buffer_size,
             stream_buffer_log_file=self.tap_run_log_file,
             profiling_mode=self.profiling_mode,
-            profiling_dir=self.profiling_dir,
+            profiling_dir=local_profiling_dir,
         )
 
         # Do not run if another instance is already running
@@ -1057,13 +1074,19 @@ class PipelineWise:
             sys.stdout.write(line)
             return update_state_file(line)
 
-        # Run command with update_state_file as a callback to call for every stdout line
-        if self.extra_log:
-            commands.run_command(
-                command, self.tap_run_log_file, update_state_file_with_extra_log
-            )
-        else:
-            commands.run_command(command, self.tap_run_log_file, update_state_file)
+        try:
+            # Run command with update_state_file as a callback to call for every stdout line
+            if self.extra_log:
+                commands.run_command(
+                    command, self.tap_run_log_file, update_state_file_with_extra_log
+                )
+            else:
+                commands.run_command(command, self.tap_run_log_file, update_state_file)
+        finally:
+            if self.profiling_mode:
+                for pstat in local_profiling_dir.iterdir():
+                    # Move the local cache to the desired location.
+                    (Pathy.fluid(self.profiling_dir) / pstat.name).write_bytes(pstat.read_bytes())
 
         # update the state file one last time to make sure it always has the last state message.
         if state is not None:
@@ -1076,6 +1099,10 @@ class PipelineWise:
         """
         Generating and running shell command to sync tables using the native fastsync components
         """
+        local_profiling_dir = None
+        if self.profiling_mode:
+            local_profiling_dir = utils.ensure_local_file(self.profiling_dir)
+
         # Build the fastsync executable command
         command = commands.build_fastsync_command(
             tap=tap,
@@ -1085,7 +1112,7 @@ class PipelineWise:
             temp_dir=self.get_temp_dir(),
             tables=self.args.tables,
             profiling_mode=self.profiling_mode,
-            profiling_dir=self.profiling_dir,
+            profiling_dir=local_profiling_dir,
             drop_pg_slot=self.drop_pg_slot,
         )
 
@@ -1109,14 +1136,20 @@ class PipelineWise:
             sys.stdout.write(line)
             return line
 
-        if self.extra_log:
-            # Run command and copy fastsync output to main logger
-            commands.run_command(
-                command, self.tap_run_log_file, add_fastsync_output_to_main_logger
-            )
-        else:
-            # Run command
-            commands.run_command(command, self.tap_run_log_file)
+        try:
+            if self.extra_log:
+                # Run command and copy fastsync output to main logger
+                commands.run_command(
+                    command, self.tap_run_log_file, add_fastsync_output_to_main_logger
+                )
+            else:
+                # Run command
+                commands.run_command(command, self.tap_run_log_file)
+        finally:
+            if self.profiling_mode:
+                for pstat in local_profiling_dir.iterdir():
+                    # Move the local cache to the desired location.
+                    (Pathy.fluid(self.profiling_dir) / pstat.name).write_bytes(pstat.read_bytes())
 
     # pylint: disable=too-many-statements,too-many-locals
     def run_tap(self) -> None:
@@ -1755,14 +1788,14 @@ TAP RUN SUMMARY
 
     def _cleanup_tap_state_file(self) -> None:
         tables = self.args.tables
-        state_file = self.tap['files']['state']
+        state_file = Pathy.fluid(self.tap['files']['state'])
         if tables:
             self._clean_tables_from_bookmarks_in_state_file(state_file, tables)
         else:
             utils.silentremove(state_file)
 
     @staticmethod
-    def _clean_tables_from_bookmarks_in_state_file(state_file_to_clean: Path, tables: str) -> None:
+    def _clean_tables_from_bookmarks_in_state_file(state_file_to_clean: FluidPath, tables: str) -> None:
         try:
             with state_file_to_clean.open('r+', encoding='UTF-8') as state_file:
                 state_data = json.load(state_file)
@@ -1782,7 +1815,7 @@ TAP RUN SUMMARY
             pass
 
     def __validate_transformations(
-        self, transformation_file: Path, catalog: Dict, tap_id: str, target_id: str
+        self, transformation_file: FluidPath, catalog: Dict, tap_id: str, target_id: str
     ) -> Optional[str]:
         """
         Run validation of transformation config
@@ -1804,18 +1837,24 @@ TAP RUN SUMMARY
 
             utils.save_json(catalog, temp_catalog_file)
 
-            command = f"""
-                {self.transform_field_bin} --validate --config {transformation_file} --catalog {temp_catalog_file}
-                """
+            command = (
+                f'{self.transform_field_bin} --validate '
+                f'--config {utils.ensure_local_file(transformation_file)} --catalog {temp_catalog_file}'
+            )
 
             if self.profiling_mode:
-                profiling_dir = cast(Path, self.profiling_dir)
+                profiling_dir = utils.ensure_local_file(self.profiling_dir)
                 dump_file = profiling_dir / f'transformation_{tap_id}_{target_id}.pstat'
                 command = f'{self.transform_field_python_bin} -m cProfile -o {dump_file} {command}'
 
             self.logger.debug('Transformation validation command: %s', command)
 
-            result = commands.run_command(command)
+            try:
+                result = commands.run_command(command)
+            finally:
+                if self.profiling_mode:
+                    # Move the local cache to the desired location.
+                    (Pathy.fluid(self.profiling_dir) / dump_file.name).write_bytes(dump_file.read_bytes())
 
             # Get output and errors from command
             returncode, _, stderr = result

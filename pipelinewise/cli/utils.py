@@ -12,6 +12,7 @@ import sys
 import tempfile
 import warnings
 import jsonschema
+from pathy import FluidPath, Pathy
 import yaml
 
 from io import StringIO
@@ -57,7 +58,7 @@ class AnsibleJSONEncoder(json.JSONEncoder):
         elif isinstance(o, (date, datetime)):
             # date object
             value = o.isoformat()
-        elif isinstance(o, Path):
+        elif isinstance(o, (Path, Pathy)):
             value = str(o)
         else:
             # use default encoder
@@ -76,11 +77,12 @@ def is_json(stringss: str) -> bool:
     return True
 
 
-def is_json_file(path: Path) -> bool:
+def is_json_file(path: FluidPath) -> bool:
     """
     Detects if a file is a valid json file or not
     """
     try:
+        path = Pathy.fluid(path)
         if path.is_file():
             with path.open(encoding='utf-8') as jsonfile:
                 if json.load(jsonfile):
@@ -90,11 +92,12 @@ def is_json_file(path: Path) -> bool:
         return False
 
 
-def load_json(path: Path) -> Optional[Any]:
+def load_json(path: FluidPath) -> Optional[Any]:
     """
     Deserialize JSON file to python object
     """
     try:
+        path = Pathy.fluid(path)
         LOGGER.debug('Parsing file at %s', path)
         if path.is_file():
             with path.open(encoding='utf-8') as jsonfile:
@@ -117,11 +120,12 @@ def is_state_message(line: str) -> bool:
         return False
 
 
-def save_json(data: Any, path: Path) -> None:
+def save_json(data: Any, path: FluidPath) -> None:
     """
     Serializes and saves any data structure to JSON files
     """
     try:
+        path = Pathy.fluid(path)
         LOGGER.debug('Saving JSON %s', path)
         with path.open('w', encoding='utf-8') as jsonfile:
             json.dump(
@@ -322,7 +326,7 @@ def delete_keys_from_dict(dic, keys):
     }
 
 
-def silentremove(path: Path) -> None:
+def silentremove(path: FluidPath) -> None:
     """
     Deleting file with no error message if the file not exists
     """
@@ -337,14 +341,15 @@ def silentremove(path: Path) -> None:
 
 
 def search_files(
-    search_dir: Path, patterns: Optional[List[str]] = None, sort: bool = False, abs_path: bool = False
-) -> List[Path]:
+    search_dir: FluidPath, patterns: Optional[List[str]] = None, sort: bool = False, abs_path: bool = False
+) -> List[FluidPath]:
     """
     Searching files in a specific directory that match a pattern
     """
     if patterns is None:
         patterns = ['*']
 
+    search_dir = Pathy.fluid(search_dir)
     if search_dir.is_dir():
         # Search files and sort if required
         p_files = []
@@ -358,11 +363,12 @@ def search_files(
     return [path if not abs_path else path.absolute() for path in p_files]
 
 
-def extract_log_attributes(log_file: Path) -> Dict[str, Any]:
+def extract_log_attributes(log_file: FluidPath) -> Dict[str, Any]:
     """
     Extracting common properties from a log file name
     """
     LOGGER.debug('Extracting attributes from log file %s', log_file)
+    log_file = Pathy.fluid(log_file)
     target_id = 'unknown'
     tap_id = 'unknown'
     timestamp = datetime.utcfromtimestamp(0).isoformat()
@@ -384,7 +390,7 @@ def extract_log_attributes(log_file: Path) -> Dict[str, Any]:
 
     # Return as a dictionary
     return {
-        'filename': log_file,
+        'filename': str(log_file),
         'target_id': target_id,
         'tap_id': tap_id,
         'timestamp': timestamp,
@@ -488,18 +494,25 @@ def get_pipelinewise_python_bin(venv_dir: Path) -> str:
 
 # pylint: disable=redefined-builtin
 def create_temp_file(
-    suffix: Optional[str] = None, prefix: Optional[str] = None, dir: Optional[Path] = None, text: Optional[str] = None
+    suffix: Optional[str] = None,
+    prefix: Optional[str] = None,
+    dir: Optional[FluidPath] = None,
+    text: Optional[str] = None,
 ) -> Path:
     """
     Create temp file with parent directories if not exists
     """
-    if dir:
+    dir = Pathy.fluid(dir) if dir is not None else dir
+    if isinstance(dir, Path):
         dir.mkdir(parents=True, exist_ok=True)
+    elif isinstance(dir, Pathy):
+        raise ValueError(f'Temporary directory cannot be at remote: {dir}')
+
     _, temp_file = tempfile.mkstemp(suffix, prefix, dir, text)
     return Path(temp_file)
 
 
-def find_errors_in_log_file(file: Path, max_errors: int = 10, error_pattern: str = None) -> List[str]:
+def find_errors_in_log_file(file: FluidPath, max_errors: int = 10, error_pattern: str = None) -> List[str]:
     """
     Find error lines in a log file
 
@@ -511,6 +524,7 @@ def find_errors_in_log_file(file: Path, max_errors: int = 10, error_pattern: str
     Returns:
         List of error messages found in the file
     """
+    file = Pathy.fluid(file)
     # List of known exception patterns in logs
     known_error_patterns = re.compile(
         # PPW error log patterns
@@ -565,7 +579,7 @@ def generate_random_string(length: int = 8) -> str:
     )
 
 
-def log_file_with_status(log_file: Path, status: str) -> Path:
+def log_file_with_status(log_file: FluidPath, status: str) -> FluidPath:
     """
     Adds an extension to a log file that represents the
     actual status of the tap
@@ -578,3 +592,11 @@ def log_file_with_status(log_file: Path, status: str) -> Path:
         Path object pointing to log file with status extension
     """
     return log_file.with_suffix(log_file.suffix + '.' + status)
+
+
+def ensure_local_file(path: FluidPath) -> Path:
+    """This function checks whether a file is remote and if so downloads a local copy."""
+    path = Pathy.fluid(path)
+    if isinstance(path, Pathy):
+        return Pathy.to_local(path)
+    return path
