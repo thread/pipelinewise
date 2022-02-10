@@ -14,6 +14,7 @@ import warnings
 import jsonschema
 import yaml
 import uuid
+import dataclasses
 
 from io import StringIO
 from datetime import date, datetime
@@ -599,6 +600,7 @@ def copy_path_to_local_tmp(path: FluidPath) -> Path:
     Copies a potentially remote file to a temporary file on the local filesystem.
     """
     tmp = create_temp_file()
+    tmp.touch(exist_ok=True)
     tmp.write_bytes(Pathy.fluid(path).read_bytes())
     return tmp
 
@@ -610,11 +612,12 @@ def copy_params_to_local_tmp(
     Creates a copy of the parameter class with all files having been copied to
     local temp files.
     """
-    obj_dict = obj.asdict()
+    obj_dict = dataclasses.asdict(obj)
     for value in obj_dict.values():
         # Make temporary copies of all the files to pass to the tap/target/transform.
         if isinstance(value, Path):
-            value = copy_path_to_local_tmp(Pathy.fluid(value))
+            if value.is_file():
+                value = copy_path_to_local_tmp(Pathy.fluid(value))
     return obj.__class__(**obj_dict)
 
 
@@ -623,7 +626,7 @@ def clean_up_params(obj: Union[TapParams, TargetParams, TransformParams]) -> Non
     Deletes all files which a parameter class points to. Only use the function on
     objects created by `copy_params_to_local_tmp`.
     """
-    obj_dict = obj.asdict()
+    obj_dict = dataclasses.asdict(obj)
     for value in obj_dict.values():
         # Make temporary copies of all the files to pass to the tap/target/transform.
         if isinstance(value, Path):
