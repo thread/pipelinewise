@@ -3,6 +3,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from random import randint
+from pathlib import Path
 
 import bson
 import pytest
@@ -82,6 +83,8 @@ class TestTargetBigquery:
             f'pipelinewise import_config --dir {self.project_dir}'
         )
         assertions.assert_command_success(return_code, stdout, stderr)
+        assert (Path('~/.pipelinewise').expanduser() / 'config.json').is_file()
+        assert (Path('~/.pipelinewise').expanduser() / TARGET_ID / TAP_MARIADB_ID / 'config.json').is_file()
 
     @pytest.mark.dependency(depends=['import_config'])
     def test_replicate_mariadb_to_bq(self, tap_mariadb_id=TAP_MARIADB_ID):
