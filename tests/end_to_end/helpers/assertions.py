@@ -20,6 +20,10 @@ def assert_run_tap_success(tap, target, sync_engines, profiling=False):
 
     [return_code, stdout, stderr] = tasks.run_command(command)
 
+    print("retcod: ", return_code)
+    print("stdout: ", stdout)
+    print("sterr: ", stderr)
+
     for sync_engine in sync_engines:
         log_file = tasks.find_run_tap_log_file(stdout, sync_engine)
         assert_command_success(return_code, stdout, stderr, log_file)
