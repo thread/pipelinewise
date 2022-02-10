@@ -36,14 +36,14 @@ class TapParams:
         }
 
         for param, file_property in list_of_params_in_json_file.items():
-            valid_json = do_json_conf_validation(
-                json_file=getattr(self, param, None),
-                file_property=file_property
-               ) if getattr(self, param, None) else True
-
-            if not valid_json:
+            try:
+                do_json_conf_validation(
+                    json_file=getattr(self, param, None),
+                    file_property=file_property
+                )
+            except Exception as exc:
                 raise RunCommandException(
-                    f'Invalid json file for {param}: {getattr(self, param, None)}')
+                    f'Invalid json file for {param}: {getattr(self, param, None)}') from exc
 
 
 @dataclass
@@ -58,12 +58,13 @@ class TargetParams:
     config: FluidPath
 
     def __post_init__(self):
-        valid_json = do_json_conf_validation(
-            json_file=self.config,
-            file_property={'file_must_exists': True, 'allowed_empty': False}) if self.config else False
-
-        if not valid_json:
-            raise RunCommandException(f'Invalid json file for config: {self.config}')
+        try:
+            do_json_conf_validation(
+                json_file=self.config,
+                file_property={'file_must_exists': True, 'allowed_empty': False}
+            )
+        except Exception as exc:
+            raise RunCommandException(f'Invalid json file for config: {self.config}') from exc
 
 
 @dataclass
@@ -84,22 +85,27 @@ def _verify_json_file(json_file_path: FluidPath, file_must_exists: bool, allowed
         with json_file_path.open('r', encoding='utf-8') as json_file:
             json.load(json_file)
     except FileNotFoundError:
-        return not file_must_exists
+        if file_must_exists:
+            raise
     except json.decoder.JSONDecodeError:
         if not allowed_empty or json_file_path.stat().st_size != 0:
-            return False
-    return True
+            raise
 
 
 def do_json_conf_validation(json_file: FluidPath, file_property: dict) -> bool:
     """
     Validating a json format config property and retry if it is invalid
     """
+    exception = None
     for _ in range(PARAMS_VALIDATION_RETRY_TIMES):
-        if _verify_json_file(json_file_path=json_file,
-                             file_must_exists=file_property['file_must_exists'],
-                             allowed_empty=file_property['allowed_empty']):
+        try:
+            _verify_json_file(json_file_path=json_file,
+                              file_must_exists=file_property['file_must_exists'],
+                              allowed_empty=file_property['allowed_empty'])
             return True
+        except (FileNotFoundError, json.decoder.JSONDecodeError) as exc:
+            exception = exc
+            time.sleep(PARAMS_VALIDATION_RETRY_PERIOD_SEC)
 
-        time.sleep(PARAMS_VALIDATION_RETRY_PERIOD_SEC)
-    return False
+    if exception is not None:
+        raise exception
