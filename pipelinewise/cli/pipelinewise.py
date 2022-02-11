@@ -797,7 +797,9 @@ class PipelineWise:
         finally:
             if self.profiling_mode:
                 # Move the local cache to the desired location.
-                (Pathy.fluid(self.profiling_dir) / dump_file.name).write_bytes(dump_file.read_bytes())
+                dest = Pathy.fluid(self.profiling_dir) / dump_file.name
+                dest.touch()
+                dest.write_bytes(dump_file.read_bytes())
 
         # Get output and errors from tap
         # pylint: disable=unused-variable
@@ -867,7 +869,9 @@ class PipelineWise:
         finally:
             if self.profiling_mode:
                 # Move the local cache to the desired location.
-                (Pathy.fluid(self.profiling_dir) / dump_file.name).write_bytes(dump_file.read_bytes())
+                dest = Pathy.fluid(self.profiling_dir) / dump_file.name
+                dest.touch()
+                dest.write_bytes(dump_file.read_bytes())
 
         # Get output and errors from tap
         # pylint: disable=unused-variable
@@ -1086,7 +1090,9 @@ class PipelineWise:
             if self.profiling_mode:
                 for pstat in local_profiling_dir.iterdir():
                     # Move the local cache to the desired location.
-                    (Pathy.fluid(self.profiling_dir) / pstat.name).write_bytes(pstat.read_bytes())
+                    dest = Pathy.fluid(self.profiling_dir) / pstat.name
+                    dest.touch()
+                    dest.write_bytes(pstat.read_bytes())
 
         # update the state file one last time to make sure it always has the last state message.
         if state is not None:
@@ -1149,7 +1155,9 @@ class PipelineWise:
             if self.profiling_mode:
                 for pstat in local_profiling_dir.iterdir():
                     # Move the local cache to the desired location.
-                    (Pathy.fluid(self.profiling_dir) / pstat.name).write_bytes(pstat.read_bytes())
+                    dest = Pathy.fluid(self.profiling_dir) / pstat.name
+                    dest.touch()
+                    dest.write_bytes(pstat.read_bytes())
 
     # pylint: disable=too-many-statements,too-many-locals
     def run_tap(self) -> None:
@@ -1854,7 +1862,9 @@ TAP RUN SUMMARY
             finally:
                 if self.profiling_mode:
                     # Move the local cache to the desired location.
-                    (Pathy.fluid(self.profiling_dir) / dump_file.name).write_bytes(dump_file.read_bytes())
+                    dest = Pathy.fluid(self.profiling_dir) / dump_file.name
+                    dest.touch()
+                    dest.write_bytes(dump_file.read_bytes())
 
             # Get output and errors from command
             returncode, _, stderr = result
