@@ -25,7 +25,9 @@ class E2EEnv:
     def __init__(self, project_dir, config_dir=CONFIG_DIR):
         self.sf_schema_postfix = f'_{str(uuid.uuid4())[:8]}'
         self._load_env()
+        self.project_dir = project_dir
         self.config_dir = Pathy.fluid(config_dir)
+        os.environ['PIPELINEWISE_CONFIG_DIRECTORY'] = str(self.config_dir)
 
         # User local filesystem to emulate remote storage.
         use_fs()

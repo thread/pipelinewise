@@ -11,13 +11,11 @@ from . import tasks
 from . import db
 
 
-def assert_run_tap_success(tap, target, sync_engines, profiling=False, config_dir=None):
+def assert_run_tap_success(tap, target, sync_engines, profiling=False):
     """Run a specific tap and make sure that it's using the correct sync engine,
     finished successfully and state file created with the right content"""
 
     command = f'pipelinewise run_tap --tap {tap} --target {target}'
-    if config_dir:
-        command = f'PIPELINEWISE_CONFIG_DIRECTORY={config_dir} {command}'
 
     if profiling:
         command = f'{command} --profiler'
@@ -35,14 +33,11 @@ def assert_run_tap_success(tap, target, sync_engines, profiling=False, config_di
         )
 
 
-def assert_resync_tables_success(tap, target, profiling=False, config_dir=None):
+def assert_resync_tables_success(tap, target, profiling=False):
     """Resync a specific tap and make sure that it's using the correct sync engine,
     finished successfully and state file created with the right content"""
 
     command = f'pipelinewise sync_tables --tap {tap} --target {target}'
-
-    if config_dir:
-        command = f'PIPELINEWISE_CONFIG_DIRECTORY={config_dir} {command}'
 
     if profiling:
         command = f'{command} --profiler'
