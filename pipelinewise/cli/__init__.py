@@ -125,7 +125,7 @@ def __disable_profiler(
         if not pstat_filename.endswith('.pstat'):
             pstat_filename = f'{pstat_filename}.pstat'
 
-        dump_file = utils.ensure_local(profiling_dir) / pstat_filename
+        dump_file = utils.ensure_local(profiling_dir / pstat_filename)
 
         logger.debug('Attempting to dump profiling stats in file "%s" ...', dump_file)
         profiler.dump_stats(dump_file)

@@ -598,9 +598,6 @@ def ensure_local(path: FluidPath) -> Path:
     """This function checks whether a file is remote and if so downloads a local copy."""
     path = Pathy.fluid(path)
     if isinstance(path, Pathy):
-        if path.is_file():
-            path = Pathy.to_local(path)
-        elif path.is_dir():
-            path = Pathy.to_local(path)
-            path.mkdir(parents=True, exist_ok=True)
+        path = Pathy.to_local(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     return path
