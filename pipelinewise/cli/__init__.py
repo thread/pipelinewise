@@ -2,7 +2,6 @@
 PipelineWise CLI
 """
 import argparse
-import errno
 import os
 import sys
 import copy
@@ -13,7 +12,7 @@ from datetime import datetime
 from typing import Optional, Tuple
 from pkg_resources import get_distribution
 from pathlib import Path
-from pathy import Pathy
+from pathy import FluidPath, Pathy
 
 from .utils import generate_random_string
 from .pipelinewise import PipelineWise
@@ -94,15 +93,8 @@ def __init_profiler(
             f'{datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")}_{generate_random_string(10)}'
         )
 
-        try:
-            os.makedirs(profiling_dir)
-            logger.debug('Profiling directory "%s" created', profiling_dir)
-
-        except OSError as ex:
-            if ex.errno != errno.EEXIST:
-                raise
-
-            logger.debug('Profiling directory "%s" already exists', profiling_dir)
+        profiling_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug('Profiling directory "%s" created', profiling_dir)
 
         return profiler, profiling_dir
 
@@ -113,7 +105,7 @@ def __init_profiler(
 
 def __disable_profiler(
     profiler: Optional[Profile],
-    profiling_dir: Optional[str],
+    profiling_dir: Optional[FluidPath],
     pstat_filename: Optional[str],
     logger: logging.Logger,
 ):
@@ -133,12 +125,15 @@ def __disable_profiler(
         if not pstat_filename.endswith('.pstat'):
             pstat_filename = f'{pstat_filename}.pstat'
 
-        dump_file = os.path.join(profiling_dir, pstat_filename)
+        dump_file = utils.ensure_local_file(profiling_dir) / pstat_filename
 
         logger.debug('Attempting to dump profiling stats in file "%s" ...', dump_file)
         profiler.dump_stats(dump_file)
         logger.debug('Profiling stats dump successful')
 
+        dest = profiling_dir / pstat_filename
+        dest.touch()
+        dest.write_bytes(dump_file.read_bytes())
         logger.info('Profiling stats files are in folder "%s"', profiling_dir)
 
         profiler.clear()
