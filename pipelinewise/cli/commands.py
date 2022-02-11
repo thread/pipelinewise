@@ -186,8 +186,7 @@ def build_tap_command(
     )
 
     if profiling_mode:
-        profiling_dir = cast(Path, profiling_dir)
-        dump_file = profiling_dir / f'tap_{tap.tap_id}.pstat'
+        dump_file = utils.ensure_local(profiling_dir / f'tap_{tap.tap_id}.pstat')
         tap_command = f'{tap.python_bin} -m cProfile -o {dump_file} {tap_command}'
 
     return tap_command
@@ -211,8 +210,7 @@ def build_target_command(
     target_command = f'{target.bin} --config {utils.ensure_local(target.config)}'
 
     if profiling_mode:
-        profiling_dir = cast(Path, profiling_dir)
-        dump_file = profiling_dir / f'target_{target.target_id}.pstat'
+        dump_file = utils.ensure_local(profiling_dir / f'target_{target.target_id}.pstat')
         target_command = (
             f'{target.python_bin} -m cProfile -o {dump_file} {target_command}'
         )
@@ -244,8 +242,9 @@ def build_transformation_command(
             trans_command = f'{transform.bin} --config {utils.ensure_local(transform.config)}'
 
             if profiling_mode:
-                profiling_dir = cast(Path, profiling_dir)
-                dump_file = profiling_dir / f'transformation_{transform.tap_id}_{transform.target_id}.pstat'
+                dump_file = utils.ensure_local(
+                    profiling_dir / f'transformation_{transform.tap_id}_{transform.target_id}.pstat'
+                )
 
                 trans_command = (
                     f'{transform.python_bin} -m cProfile -o {dump_file} {trans_command}'
@@ -414,8 +413,9 @@ def build_fastsync_command(
     command = f'{fastsync_bin} {command_args}'
 
     if profiling_mode:
-        profiling_dir = cast(Path, profiling_dir)
-        dump_file = profiling_dir / f'fastsync_{tap.tap_id}_{target.target_id}.pstat'
+        dump_file = utils.ensure_local(
+            profiling_dir / f'fastsync_{tap.tap_id}_{target.target_id}.pstat'
+        )
         command = f'{ppw_python_bin} -m cProfile -o {dump_file} {command}'
 
     LOGGER.debug('FastSync command: %s', command)

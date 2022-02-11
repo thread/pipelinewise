@@ -131,9 +131,7 @@ def __disable_profiler(
         profiler.dump_stats(dump_file)
         logger.debug('Profiling stats dump successful')
 
-        dest = profiling_dir / pstat_filename
-        dest.touch()
-        dest.write_bytes(dump_file.read_bytes())
+        Pathy.fluid(profiling_dir / pstat_filename).write_bytes(dump_file.read_bytes())
         logger.info('Profiling stats files are in folder "%s"', profiling_dir)
 
         profiler.clear()

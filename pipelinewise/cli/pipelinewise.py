@@ -788,8 +788,7 @@ class PipelineWise:
         command = f'{self.tap_bin} --config {tap_config} --discover'
 
         if self.profiling_mode:
-            profiling_dir = utils.ensure_local(self.profiling_dir)
-            dump_file = profiling_dir / f'tap_{tap_id}.pstat'
+            dump_file = utils.ensure_local(self.profiling_dir / f'tap_{tap_id}.pstat')
             command = f'{self.tap_python_bin} -m cProfile -o {dump_file} {command}'
 
         try:
@@ -797,9 +796,7 @@ class PipelineWise:
         finally:
             if self.profiling_mode:
                 # Move the local cache to the desired location.
-                dest = Pathy.fluid(self.profiling_dir) / dump_file.name
-                dest.touch()
-                dest.write_bytes(dump_file.read_bytes())
+                Pathy.fluid(self.profiling_dir / dump_file.name).write_bytes(dump_file.read_bytes())
 
         # Get output and errors from tap
         # pylint: disable=unused-variable
@@ -858,8 +855,7 @@ class PipelineWise:
         command = f'{tap_bin} --config {utils.ensure_local(tap_config_file)} --discover'
 
         if self.profiling_mode:
-            profiling_dir = utils.ensure_local(self.profiling_dir)
-            dump_file = profiling_dir / f'tap_{tap_id}.pstat'
+            dump_file = utils.ensure_local(self.profiling_dir / f'tap_{tap_id}.pstat')
             command = f'{tap_python_bin} -m cProfile -o {dump_file} {command}'
 
         self.logger.debug('Discovery command: %s', command)
@@ -869,9 +865,9 @@ class PipelineWise:
         finally:
             if self.profiling_mode:
                 # Move the local cache to the desired location.
-                dest = Pathy.fluid(self.profiling_dir) / dump_file.name
-                dest.touch()
-                dest.write_bytes(dump_file.read_bytes())
+                Pathy.fluid(
+                    self.profiling_dir / dump_file.name
+                ).write_bytes(dump_file.read_bytes())
 
         # Get output and errors from tap
         # pylint: disable=unused-variable
@@ -1090,9 +1086,7 @@ class PipelineWise:
             if self.profiling_mode:
                 for pstat in local_profiling_dir.iterdir():
                     # Move the local cache to the desired location.
-                    dest = Pathy.fluid(self.profiling_dir) / pstat.name
-                    dest.touch()
-                    dest.write_bytes(pstat.read_bytes())
+                    Pathy.fluid(self.profiling_dir / pstat.name).write_bytes(pstat.read_bytes())
 
         # update the state file one last time to make sure it always has the last state message.
         if state is not None:
@@ -1105,6 +1099,7 @@ class PipelineWise:
         """
         Generating and running shell command to sync tables using the native fastsync components
         """
+        # Get local version of remote files or no-op if local.
         local_profiling_dir = None
         if self.profiling_mode:
             local_profiling_dir = utils.ensure_local(self.profiling_dir)
@@ -1155,9 +1150,7 @@ class PipelineWise:
             if self.profiling_mode:
                 for pstat in local_profiling_dir.iterdir():
                     # Move the local cache to the desired location.
-                    dest = Pathy.fluid(self.profiling_dir) / pstat.name
-                    dest.touch()
-                    dest.write_bytes(pstat.read_bytes())
+                    Pathy.fluid(self.profiling_dir / pstat.name).write_bytes(pstat.read_bytes())
 
     # pylint: disable=too-many-statements,too-many-locals
     def run_tap(self) -> None:
@@ -1851,8 +1844,9 @@ TAP RUN SUMMARY
             )
 
             if self.profiling_mode:
-                profiling_dir = utils.ensure_local(self.profiling_dir)
-                dump_file = profiling_dir / f'transformation_{tap_id}_{target_id}.pstat'
+                dump_file = utils.ensure_local(
+                    self.profiling_dir / f'transformation_{tap_id}_{target_id}.pstat'
+                )
                 command = f'{self.transform_field_python_bin} -m cProfile -o {dump_file} {command}'
 
             self.logger.debug('Transformation validation command: %s', command)
@@ -1862,9 +1856,9 @@ TAP RUN SUMMARY
             finally:
                 if self.profiling_mode:
                     # Move the local cache to the desired location.
-                    dest = Pathy.fluid(self.profiling_dir) / dump_file.name
-                    dest.touch()
-                    dest.write_bytes(dump_file.read_bytes())
+                    Pathy.fluid(
+                        self.profiling_dir / dump_file.name
+                    ).write_bytes(dump_file.read_bytes())
 
             # Get output and errors from command
             returncode, _, stderr = result
