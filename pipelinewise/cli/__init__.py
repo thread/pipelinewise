@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Optional, Tuple
 from pkg_resources import get_distribution
 from pathlib import Path
+from pathy import Pathy
 
 from .utils import generate_random_string
 from .pipelinewise import PipelineWise
@@ -21,7 +22,7 @@ from ..logger import Logger
 __version__ = get_distribution('pipelinewise').version
 USER_HOME = Path('~').expanduser()
 DEFAULT_CONFIG_DIR = USER_HOME / '.pipelinewise'
-CONFIG_DIR = os.environ.get('PIPELINEWISE_CONFIG_DIRECTORY', DEFAULT_CONFIG_DIR)
+CONFIG_DIR = Pathy(os.environ.get('PIPELINEWISE_CONFIG_DIRECTORY', DEFAULT_CONFIG_DIR))
 PROFILING_DIR = CONFIG_DIR / 'profiling'
 PIPELINEWISE_DEFAULT_HOME = USER_HOME / 'pipelinewise'
 PIPELINEWISE_HOME = Path(

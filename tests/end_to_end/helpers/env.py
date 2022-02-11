@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 import re
 import glob
 import boto3
@@ -14,6 +13,8 @@ USER_HOME = os.path.expanduser('~')
 CONFIG_DIR = os.path.join(USER_HOME, '.pipelinewise')
 DIR = os.path.dirname(os.path.realpath(__file__))
 
+# User local filesystem to emulate remote storage.
+use_fs()
 
 class E2EEnv:
     """Utilities class to run End to End tests
@@ -28,9 +29,6 @@ class E2EEnv:
         self.project_dir = project_dir
         self.config_dir = Pathy.fluid(config_dir)
         os.environ['PIPELINEWISE_CONFIG_DIRECTORY'] = str(self.config_dir)
-
-        # User local filesystem to emulate remote storage.
-        use_fs()
 
         # Generate test project YAMLs from templates
         self._init_test_project_dir(project_dir)
