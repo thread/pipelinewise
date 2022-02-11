@@ -1,5 +1,6 @@
 import decimal
 import os
+from pathlib import Path
 import uuid
 from datetime import datetime, timezone
 from random import randint
@@ -11,7 +12,7 @@ from pipelinewise.fastsync import mysql_to_bigquery, postgres_to_bigquery
 
 from .helpers import tasks
 from .helpers import assertions
-from .helpers.env import E2EEnv
+from .helpers.env import CONFIG_DIR, E2EEnv
 
 DIR = os.path.dirname(__file__)
 TAP_MARIADB_ID = 'mariadb_to_bq'
@@ -23,20 +24,22 @@ TAP_MONGODB_ID = 'mongo_to_bq'
 TAP_S3_CSV_ID = 's3_csv_to_bq'
 TARGET_ID = 'bigquery'
 
+CONFIG_DIRS = [str(Path.home() / '.pipelinewise'), 's3://fake-bucket']
 
 # pylint: disable=attribute-defined-outside-init
+@pytest.mark.parametrize('config_dir', CONFIG_DIRS)
 class TestTargetBigquery:
     """
     End to end tests for Target Bigquery
     """
 
-    def setup_method(self):
+    def setup_method(self, config_dir):
         """Initialise test project by generating YAML files from
         templates for all the configured connectors"""
         self.project_dir = os.path.join(DIR, 'test-project')
 
         # Init query runner methods
-        self.e2e = E2EEnv(self.project_dir)
+        self.e2e = E2EEnv(self.project_dir, config_dir=config_dir)
         self.run_query_tap_mysql = self.e2e.run_query_tap_mysql
         self.run_query_tap_postgres = self.e2e.run_query_tap_postgres
         self.run_query_target_bigquery = self.e2e.run_query_target_bigquery
@@ -45,15 +48,17 @@ class TestTargetBigquery:
         if self.e2e.env['TARGET_BIGQUERY']['is_configured']:
             self.e2e.setup_target_bigquery()
 
-    def teardown_method(self):
+    def teardown_method(self, config_dir):
         """Delete test directories and database objects"""
 
     @pytest.mark.dependency(name='validate')
-    def test_validate(self):
+    def test_validate(self, config_dir):
         """Validate the YAML project with taps and target """
 
         # validate project
-        return_code, stdout, stderr = tasks.run_command(f'pipelinewise validate --dir {self.project_dir}')
+        return_code, stdout, stderr = tasks.run_command(
+            f'PIPELINEWISE_CONFIG_DIRECTORY={config_dir} pipelinewise validate --dir {self.project_dir}'
+        )
 
         print('--------------- stdout ----------', stdout)
         print('--------------- stderr ----------', stderr)
@@ -61,7 +66,7 @@ class TestTargetBigquery:
 
     @pytest.mark.dependency(depends=['validate'])
     @pytest.mark.dependency(name='import_config')
-    def test_import_project(self):
+    def test_import_project(self, config_dir):
         """Import the YAML project with taps and target and do discovery mode
         to write the JSON files for singer connectors"""
 
@@ -79,16 +84,16 @@ class TestTargetBigquery:
 
         # Import project
         [return_code, stdout, stderr] = tasks.run_command(
-            f'pipelinewise import_config --dir {self.project_dir}'
+            f'PIPELINEWISE_CONFIG_DIRECTORY={config_dir} pipelinewise import_config --dir {self.project_dir}'
         )
         assertions.assert_command_success(return_code, stdout, stderr)
 
     @pytest.mark.dependency(depends=['import_config'])
-    def test_replicate_mariadb_to_bq(self, tap_mariadb_id=TAP_MARIADB_ID):
+    def test_replicate_mariadb_to_bq(self, config_dir, tap_mariadb_id=TAP_MARIADB_ID):
         """Replicate data from MariaDB to Bigquery"""
         # 1. Run tap first time - both fastsync and a singer should be triggered
         assertions.assert_run_tap_success(
-            tap_mariadb_id, TARGET_ID, ['fastsync', 'singer']
+            tap_mariadb_id, TARGET_ID, ['fastsync', 'singer'], config_dir=config_dir
         )
         assertions.assert_row_counts_equal(
             self.run_query_tap_mysql, self.run_query_target_bigquery
@@ -172,7 +177,7 @@ class TestTargetBigquery:
         assert result == 0
 
     @pytest.mark.dependency(depends=['import_config'])
-    def test_resync_mariadb_to_bq(self, tap_mariadb_id=TAP_MARIADB_ID):
+    def test_resync_mariadb_to_bq(self, config_dir, tap_mariadb_id=TAP_MARIADB_ID):
         """Resync tables from MariaDB to Bigquery"""
         assertions.assert_resync_tables_success(
             tap_mariadb_id, TARGET_ID, profiling=True
@@ -189,7 +194,7 @@ class TestTargetBigquery:
     # pylint: disable=invalid-name
     @pytest.mark.dependency(depends=['import_config'])
     def test_resync_mariadb_to_bq_with_split_large_files(
-        self, tap_mariadb_id=TAP_MARIADB_SPLIT_LARGE_FILES_ID
+        self, config_dir, tap_mariadb_id=TAP_MARIADB_SPLIT_LARGE_FILES_ID
     ):
         """Resync tables from MariaDB to Bigquery using splitting large files option"""
         assertions.assert_resync_tables_success(
@@ -206,13 +211,13 @@ class TestTargetBigquery:
 
     # pylint: disable=invalid-name
     @pytest.mark.dependency(depends=['import_config'])
-    def test_replicate_mariadb_to_bq_with_custom_buffer_size(self):
+    def test_replicate_mariadb_to_bq_with_custom_buffer_size(self, config_dir):
         """Replicate data from MariaDB to Bigquery with custom buffer size
         Same tests cases as test_replicate_mariadb_to_bq but using another tap with custom stream buffer size"""
-        self.test_replicate_mariadb_to_bq(tap_mariadb_id=TAP_MARIADB_BUFFERED_STREAM_ID)
+        self.test_replicate_mariadb_to_bq(config_dir, tap_mariadb_id=TAP_MARIADB_BUFFERED_STREAM_ID)
 
     @pytest.mark.dependency(depends=['import_config'])
-    def test_replicate_pg_to_bq(self):
+    def test_replicate_pg_to_bq(self, config_dir):
         """Replicate data from Postgres to Bigquery"""
         # Run tap first time - both fastsync and a singer should be triggered
         assertions.assert_run_tap_success(
@@ -302,7 +307,7 @@ class TestTargetBigquery:
     # pylint: disable=invalid-name
     @pytest.mark.dependency(depends=['import_config'])
     def test_resync_pg_to_bq_with_split_large_files(
-        self, tap_postgres_id=TAP_POSTGRES_SPLIT_LARGE_FILES_ID
+        self, config_dir, tap_postgres_id=TAP_POSTGRES_SPLIT_LARGE_FILES_ID
     ):
         """Resync tables from Postgres to Bigquery using splitting large files option"""
         assertions.assert_resync_tables_success(
@@ -318,7 +323,7 @@ class TestTargetBigquery:
         )
 
     @pytest.mark.dependency(depends=['import_config'])
-    def test_replicate_s3_to_bq(self):
+    def test_replicate_s3_to_bq(self, config_dir):
         """Replicate csv files from s3 to Bigquery, check if return code is zero and success log file created"""
         # Skip tap_s3_csv related test if required env vars not provided
         if not self.e2e.env['TAP_S3_CSV']['is_configured']:
@@ -362,7 +367,7 @@ class TestTargetBigquery:
         assert_columns_exist()
 
     @pytest.mark.dependency(depends=['import_config'])
-    def test_replicate_mongodb_to_bq(self):
+    def test_replicate_mongodb_to_bq(self, config_dir):
         """Replicate mongodb to Bigquery"""
 
         def assert_columns_exist(table):

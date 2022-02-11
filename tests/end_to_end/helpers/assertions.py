@@ -5,15 +5,19 @@ import re
 from typing import List, Set, Union
 from pathlib import Path
 
+from pathy import Pathy
+
 from . import tasks
 from . import db
 
 
-def assert_run_tap_success(tap, target, sync_engines, profiling=False):
+def assert_run_tap_success(tap, target, sync_engines, profiling=False, config_dir=None):
     """Run a specific tap and make sure that it's using the correct sync engine,
     finished successfully and state file created with the right content"""
 
     command = f'pipelinewise run_tap --tap {tap} --target {target}'
+    if config_dir:
+        command = f'PIPELINEWISE_CONFIG_DIRECTORY={config_dir} {command}'
 
     if profiling:
         command = f'{command} --profiler'
@@ -31,11 +35,14 @@ def assert_run_tap_success(tap, target, sync_engines, profiling=False):
         )
 
 
-def assert_resync_tables_success(tap, target, profiling=False):
+def assert_resync_tables_success(tap, target, profiling=False, config_dir=None):
     """Resync a specific tap and make sure that it's using the correct sync engine,
     finished successfully and state file created with the right content"""
 
     command = f'pipelinewise sync_tables --tap {tap} --target {target}'
+
+    if config_dir:
+        command = f'PIPELINEWISE_CONFIG_DIRECTORY={config_dir} {command}'
 
     if profiling:
         command = f'{command} --profiler'
@@ -58,36 +65,36 @@ def assert_command_success(return_code, stdout, stderr, log_path=None):
     if exists"""
     if return_code != 0 or stderr != '':
         failed_log = ''
-        failed_log_path = f'{log_path}.failed'
+        failed_log_path = Pathy.fluid(f'{log_path}.failed')
         # Load failed log file if exists
-        if os.path.isfile(failed_log_path):
-            with open(failed_log_path, 'r', encoding='utf-8') as file:
+        if failed_log_path.is_file():
+            with failed_log_path.open('r', encoding='utf-8') as file:
                 failed_log = file.read()
 
         print(f'STDOUT: {stdout}\nSTDERR: {stderr}\nFAILED LOG: {failed_log}')
         assert False
 
     # check success log file if log path defined
-    success_log_path = f'{log_path}.success'
-    if log_path and not os.path.isfile(success_log_path):
+    success_log_path = Pathy.fluid(f'{log_path}.success')
+    if log_path and not success_log_path.is_file():
         assert False
     else:
         assert True
 
 
-def assert_state_file_valid(target_name, tap_name, log_path=None):
+def assert_state_file_valid(target_name, tap_name, log_path=None, config_dir=Path.home() / '.pipelinewise'):
     """Assert helper function to check if state file exists for
     a certain tap for a certain target"""
-    state_file = Path(
-        f'{Path.home()}/.pipelinewise/{target_name}/{tap_name}/state.json'
+    state_file = Pathy.fluid(
+        f'{config_dir}{target_name}/{tap_name}/state.json'
     ).resolve()
-    assert os.path.isfile(state_file)
+    assert state_file.is_file()
 
     # Check if state file content equals to last emitted state in log
     if log_path:
-        success_log_path = f'{log_path}.success'
+        success_log_path = Pathy.fluid(f'{log_path}.success')
         state_in_log = None
-        with open(success_log_path, 'r', encoding='utf-8') as log_f:
+        with success_log_path.open('r', encoding='utf-8') as log_f:
             state_log_pattern = re.search(
                 r'\nINFO STATE emitted from target: (.+\n)',
                 '\n'.join(log_f.readlines()),
@@ -97,7 +104,7 @@ def assert_state_file_valid(target_name, tap_name, log_path=None):
 
         # If the emitted state message exists in the log then compare it to the actual state file
         if state_in_log:
-            with open(state_file, 'r', encoding='utf-8') as state_f:
+            with state_file.open(state_file, 'r', encoding='utf-8') as state_f:
                 assert state_in_log == ''.join(state_f.readlines())
 
 

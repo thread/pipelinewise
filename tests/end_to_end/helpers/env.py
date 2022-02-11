@@ -1,13 +1,13 @@
 import os
+from pathlib import Path
 import re
 import glob
 import boto3
-import shutil
 import subprocess
 import uuid
-from pathlib import Path
 
 from dotenv import load_dotenv
+from pathy import FluidPath, Pathy, use_fs
 from . import db
 
 USER_HOME = os.path.expanduser('~')
@@ -22,9 +22,13 @@ class E2EEnv:
     to run SQL queries on the supported databases and to run common assertions
     on the supported databases"""
 
-    def __init__(self, project_dir):
+    def __init__(self, project_dir, config_dir=CONFIG_DIR):
         self.sf_schema_postfix = f'_{str(uuid.uuid4())[:8]}'
         self._load_env()
+        self.config_dir = Pathy.fluid(config_dir)
+
+        # User local filesystem to emulate remote storage.
+        use_fs()
 
         # Generate test project YAMLs from templates
         self._init_test_project_dir(project_dir)
@@ -580,7 +584,7 @@ class E2EEnv:
         )
 
         # Clean config directory
-        shutil.rmtree(os.path.join(CONFIG_DIR, 'postgres_dwh'), ignore_errors=True)
+        self._rm_tree(self.config_dir /'snowflake')
 
     def setup_target_redshift(self):
         """Clean redshift target database and prepare for test run"""
@@ -610,7 +614,7 @@ class E2EEnv:
         self.run_query_target_redshift('INSERT INTO ppw_e2e_helper.dual VALUES (\'X\')')
 
         # Clean config directory
-        shutil.rmtree(os.path.join(CONFIG_DIR, 'redshift'), ignore_errors=True)
+        self._rm_tree(self.config_dir /'snowflake')
 
     def setup_target_snowflake(self):
         """Clean snowflake target database and prepare for test run"""
@@ -640,7 +644,7 @@ class E2EEnv:
         )
 
         # Clean config directory
-        shutil.rmtree(os.path.join(CONFIG_DIR, 'snowflake'), ignore_errors=True)
+        self._rm_tree(self.config_dir /'snowflake')
 
     def setup_target_bigquery(self):
         """Clean bigquery target database and prepare for test run"""
@@ -652,8 +656,15 @@ class E2EEnv:
         self.delete_dataset_target_bigquery('ppw_e2e_tap_s3_csv')
         self.delete_dataset_target_bigquery('ppw_e2e_tap_mongodb')
 
-    @staticmethod
-    def remove_all_state_files():
+    def remove_all_state_files(self):
         """Clean up state files to ensure tests behave the same every time"""
-        for state_file in Path(CONFIG_DIR).glob('**/state.json'):
+        for state_file in self.config_dir.glob('**/state.json'):
             state_file.unlink()
+
+    def _rm_tree(self, path: FluidPath):
+        path = Pathy.fluid(path)
+        for child in path.glob('*'):
+            if child.is_file():
+                child.unlink()
+            else:
+                self._rm_tree(child)
