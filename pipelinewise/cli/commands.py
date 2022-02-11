@@ -178,11 +178,11 @@ def build_tap_command(
 
     state_arg = ''
     if tap.state and tap.state.is_file():
-        state_arg = f'--state {utils.ensure_local_file(tap.state)}'
+        state_arg = f'--state {utils.ensure_local(tap.state)}'
 
     tap_command = (
-        f'{tap.bin} --config {utils.ensure_local_file(tap.config)} '
-        f'{catalog_argument} {utils.ensure_local_file(tap.properties)} {state_arg}'
+        f'{tap.bin} --config {utils.ensure_local(tap.config)} '
+        f'{catalog_argument} {utils.ensure_local(tap.properties)} {state_arg}'
     )
 
     if profiling_mode:
@@ -208,7 +208,7 @@ def build_target_command(
         string of command line executable
     """
 
-    target_command = f'{target.bin} --config {utils.ensure_local_file(target.config)}'
+    target_command = f'{target.bin} --config {utils.ensure_local(target.config)}'
 
     if profiling_mode:
         profiling_dir = cast(Path, profiling_dir)
@@ -241,7 +241,7 @@ def build_transformation_command(
     if transform.config.is_file():
         trans = utils.load_json(transform.config)
         if 'transformations' in trans and len(trans['transformations']) > 0:
-            trans_command = f'{transform.bin} --config {utils.ensure_local_file(transform.config)}'
+            trans_command = f'{transform.bin} --config {utils.ensure_local(transform.config)}'
 
             if profiling_mode:
                 profiling_dir = cast(Path, profiling_dir)
@@ -396,12 +396,12 @@ def build_fastsync_command(
             filter(
                 None,
                 [
-                    f'--tap {utils.ensure_local_file(tap.config)}',
-                    f'--properties {utils.ensure_local_file(tap.properties)}',
-                    f'--state {utils.ensure_local_file(tap.state)}',
-                    f'--target {utils.ensure_local_file(target.config)}',
+                    f'--tap {utils.ensure_local(tap.config)}',
+                    f'--properties {utils.ensure_local(tap.properties)}',
+                    f'--state {utils.ensure_local(tap.state)}',
+                    f'--target {utils.ensure_local(target.config)}',
                     f'--temp_dir {temp_dir}',
-                    f'--transform {utils.ensure_local_file(transform.config)}'
+                    f'--transform {utils.ensure_local(transform.config)}'
                     if transform.config and transform.config.is_file()
                     else '',
                     f'--tables {tables}' if tables else '',

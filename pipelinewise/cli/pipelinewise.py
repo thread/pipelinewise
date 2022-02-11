@@ -784,11 +784,11 @@ class PipelineWise:
 
         # Generate and run the command to run the tap directly
         # We will use the discover option to test connection
-        tap_config = utils.ensure_local_file(self.tap['files']['config'])
+        tap_config = utils.ensure_local(self.tap['files']['config'])
         command = f'{self.tap_bin} --config {tap_config} --discover'
 
         if self.profiling_mode:
-            profiling_dir = utils.ensure_local_file(self.profiling_dir)
+            profiling_dir = utils.ensure_local(self.profiling_dir)
             dump_file = profiling_dir / f'tap_{tap_id}.pstat'
             command = f'{self.tap_python_bin} -m cProfile -o {dump_file} {command}'
 
@@ -853,10 +853,10 @@ class PipelineWise:
         )
 
         # Generate and run the command to run the tap directly
-        command = f'{tap_bin} --config {utils.ensure_local_file(tap_config_file)} --discover'
+        command = f'{tap_bin} --config {utils.ensure_local(tap_config_file)} --discover'
 
         if self.profiling_mode:
-            profiling_dir = utils.ensure_local_file(self.profiling_dir)
+            profiling_dir = utils.ensure_local(self.profiling_dir)
             dump_file = profiling_dir / f'tap_{tap_id}.pstat'
             command = f'{tap_python_bin} -m cProfile -o {dump_file} {command}'
 
@@ -1017,7 +1017,7 @@ class PipelineWise:
         # Get local version of remote files or no-op if local.
         local_profiling_dir = None
         if self.profiling_mode:
-            local_profiling_dir = utils.ensure_local_file(self.profiling_dir)
+            local_profiling_dir = utils.ensure_local(self.profiling_dir)
 
         # Build the piped executable command
         command = commands.build_singer_command(
@@ -1101,7 +1101,7 @@ class PipelineWise:
         """
         local_profiling_dir = None
         if self.profiling_mode:
-            local_profiling_dir = utils.ensure_local_file(self.profiling_dir)
+            local_profiling_dir = utils.ensure_local(self.profiling_dir)
 
         # Build the fastsync executable command
         command = commands.build_fastsync_command(
@@ -1839,11 +1839,11 @@ TAP RUN SUMMARY
 
             command = (
                 f'{self.transform_field_bin} --validate '
-                f'--config {utils.ensure_local_file(transformation_file)} --catalog {temp_catalog_file}'
+                f'--config {utils.ensure_local(transformation_file)} --catalog {temp_catalog_file}'
             )
 
             if self.profiling_mode:
-                profiling_dir = utils.ensure_local_file(self.profiling_dir)
+                profiling_dir = utils.ensure_local(self.profiling_dir)
                 dump_file = profiling_dir / f'transformation_{tap_id}_{target_id}.pstat'
                 command = f'{self.transform_field_python_bin} -m cProfile -o {dump_file} {command}'
 

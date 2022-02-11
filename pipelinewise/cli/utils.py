@@ -594,9 +594,13 @@ def log_file_with_status(log_file: FluidPath, status: str) -> FluidPath:
     return log_file.with_suffix(log_file.suffix + '.' + status)
 
 
-def ensure_local_file(path: FluidPath) -> Path:
+def ensure_local(path: FluidPath) -> Path:
     """This function checks whether a file is remote and if so downloads a local copy."""
     path = Pathy.fluid(path)
     if isinstance(path, Pathy):
-        return Pathy.to_local(path)
+        if path.is_file():
+            path = Pathy.to_local(path)
+        elif path.is_dir():
+            path = Pathy.to_local(path)
+            path.mkdir(parents=True, exist_ok=True)
     return path
