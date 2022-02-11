@@ -32,7 +32,7 @@ TARGET_ID = 'bigquery'
         },
         {
             'project_dir': DIR / 'test-project',
-            'config_dir': 's3://fake-bucket',
+            'config_dir': 'gs://fake-bucket',
         },
     ],
 )
