@@ -10,6 +10,7 @@ import logging
 from cProfile import Profile
 from datetime import datetime
 from typing import Optional, Tuple
+import pathy
 from pkg_resources import get_distribution
 from pathlib import Path
 from pathy import FluidPath, Pathy
@@ -238,6 +239,10 @@ def main():
         if not args.string:
             print('You must specify a string to encrypt using the argument --string')
             sys.exit(1)
+
+    if int(os.environ.get('PIPELINEWISE_TEST_MODE', '0')):
+        # If in test mode emulate cloud storage with the local FS.
+        pathy.use_fs()
 
     logger = __init_logger(args.log, args.debug)
 

@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from random import randint
 
 import bson
-from pathy import use_fs
 import pytest
 from bson import Timestamp
 from pipelinewise.fastsync import mysql_to_bigquery, postgres_to_bigquery
@@ -38,7 +37,6 @@ TARGET_ID = 'bigquery'
     ],
 )
 def test_env(request):
-    use_fs()
     return E2EEnv(
         project_dir=request.param['project_dir'],
         config_dir=request.param['config_dir'],

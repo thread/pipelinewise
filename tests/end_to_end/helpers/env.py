@@ -30,6 +30,7 @@ class E2EEnv:
         self.config_dir = Pathy.fluid(config_dir)
         self.config_dir.mkdir(parents=True, exist_ok=True)
         os.environ['PIPELINEWISE_CONFIG_DIRECTORY'] = str(self.config_dir)
+        os.environ['PIPELINEWISE_TEST_MODE'] = str(1)
 
         # Generate test project YAMLs from templates
         self._init_test_project_dir(project_dir)
