@@ -109,7 +109,7 @@ class TestTargetBigquery:
         """Replicate data from MariaDB to Bigquery"""
         # 1. Run tap first time - both fastsync and a singer should be triggered
         assertions.assert_run_tap_success(
-            tap_mariadb_id, TARGET_ID, ['fastsync', 'singer'], config_dir=self.e2e.config_dir
+            tap_mariadb_id, TARGET_ID, ['fastsync', 'singer'],
         )
         assertions.assert_row_counts_equal(
             self.run_query_tap_mysql, self.run_query_target_bigquery
@@ -230,7 +230,7 @@ class TestTargetBigquery:
     def test_replicate_mariadb_to_bq_with_custom_buffer_size(self):
         """Replicate data from MariaDB to Bigquery with custom buffer size
         Same tests cases as test_replicate_mariadb_to_bq but using another tap with custom stream buffer size"""
-        self.test_replicate_mariadb_to_bq(self.e2e.config_dir, tap_mariadb_id=TAP_MARIADB_BUFFERED_STREAM_ID)
+        self.test_replicate_mariadb_to_bq(tap_mariadb_id=TAP_MARIADB_BUFFERED_STREAM_ID)
 
     @pytest.mark.dependency(depends=['import_config'])
     def test_replicate_pg_to_bq(self):
