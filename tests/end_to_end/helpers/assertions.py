@@ -23,6 +23,7 @@ def assert_run_tap_success(tap, target, sync_engines, profiling=False):
     [return_code, stdout, stderr] = tasks.run_command(command)
 
     for sync_engine in sync_engines:
+        print(stderr)
         log_file = tasks.find_run_tap_log_file(stdout, sync_engine)
         assert_command_success(return_code, stdout, stderr, log_file)
         assert_state_file_valid(target, tap, log_file)
