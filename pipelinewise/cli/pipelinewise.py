@@ -67,14 +67,14 @@ class PipelineWise:
 
     TRANSFORM_FIELD_CONNECTOR_NAME = 'transform-field'
 
-    def __init__(self, args: Any, config_dir: Path, venv_dir: Path, profiling_dir: Optional[Path] = None) -> None:
+    def __init__(self, args: Any, config_dir: FluidPath, venv_dir: Path, profiling_dir: Optional[Path] = None) -> None:
 
         self.profiling_mode = args.profiler
         self.profiling_dir = profiling_dir
         self.drop_pg_slot = False
         self.args = args
         self.logger = logging.getLogger(__name__)
-        self.config_dir = config_dir
+        self.config_dir = Pathy.fluid(config_dir)
         self.venv_dir = venv_dir
         self.extra_log = args.extra_log
         self.pipelinewise_bin = self.venv_dir / 'cli' / 'bin' / 'pipelinewise'
@@ -365,25 +365,25 @@ class PipelineWise:
         else:
             self.config = {}
 
-    def get_temp_dir(self) -> Path:
+    def get_temp_dir(self) -> FluidPath:
         """
         Returns the tap specific temp directory
         """
         return self.config_dir / 'tmp'
 
-    def get_tap_dir(self, target_id: str, tap_id: str) -> Path:
+    def get_tap_dir(self, target_id: str, tap_id: str) -> FluidPath:
         """
         Get absolute path of a tap directory
         """
         return self.config_dir / target_id / tap_id
 
-    def get_tap_log_dir(self, target_id: str, tap_id: str) -> Path:
+    def get_tap_log_dir(self, target_id: str, tap_id: str) -> FluidPath:
         """
         Get absolute path of a tap log directory
         """
         return self.get_tap_dir(target_id, tap_id) / 'log'
 
-    def get_target_dir(self, target_id: str) -> Path:
+    def get_target_dir(self, target_id: str) -> FluidPath:
         """
         Get absolute path of a target directory
         """
