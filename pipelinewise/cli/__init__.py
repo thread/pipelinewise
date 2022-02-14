@@ -240,9 +240,9 @@ def main():
             print('You must specify a string to encrypt using the argument --string')
             sys.exit(1)
 
-    if int(os.environ.get('PIPELINEWISE_TEST_MODE', '0')):
+    if os.environ.get('PIPELINEWISE_TEST_DIR'):
         # If in test mode emulate cloud storage with the local FS.
-        pathy.use_fs()
+        pathy.use_fs(os.environ['PIPELINEWISE_TEST_DIR'])
 
     logger = __init_logger(args.log, args.debug)
 

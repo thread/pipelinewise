@@ -8,6 +8,8 @@ import json
 from typing import Dict, List, Optional
 from pathlib import Path
 
+from pathy import FluidPath, Pathy
+
 from pipelinewise.utils import safe_column_name
 from . import utils
 
@@ -15,14 +17,14 @@ from . import utils
 class Config:
     """PipelineWise Configuration Class"""
 
-    def __init__(self, config_dir: Path):
+    def __init__(self, config_dir: FluidPath):
         """
         Class Constructor
 
         Initialising a configuration with an empty list of data flows
         """
         self.logger = logging.getLogger(__name__)
-        self.config_dir = config_dir
+        self.config_dir = Pathy.fluid(config_dir)
         self.config_path = self.config_dir / 'config.json'
         self.global_config = {}
         self.targets = {}
@@ -124,26 +126,26 @@ class Config:
 
         return config
 
-    def get_temp_dir(self) -> Path:
+    def get_temp_dir(self) -> FluidPath:
         """
         Returns the tap specific temp directory
         """
         return self.config_dir / 'tmp'
 
-    def get_target_dir(self, target_id: str) -> Path:
+    def get_target_dir(self, target_id: str) -> FluidPath:
         """
         Returns the absolute path of a target configuration directory
         """
         return self.config_dir / target_id
 
-    def get_tap_dir(self, target_id: str, tap_id: str) -> Path:
+    def get_tap_dir(self, target_id: str, tap_id: str) -> FluidPath:
         """
         Returns the absolute path of a tap configuration directory
         """
         return self.config_dir / target_id / tap_id
 
     @staticmethod
-    def get_connector_files(connector_dir: Path) -> Dict[str, Path]:
+    def get_connector_files(connector_dir: Path) -> Dict[str, FluidPath]:
         """
         Returns the absolute paths of a tap/target configuration files
         """

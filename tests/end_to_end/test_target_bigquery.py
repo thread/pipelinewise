@@ -24,7 +24,7 @@ TAP_S3_CSV_ID = 's3_csv_to_bq'
 TARGET_ID = 'bigquery'
 
 @pytest.fixture(
-    scope='function',
+    scope='class',
     params=[
         {
             'project_dir': DIR / 'test-project',
@@ -59,6 +59,7 @@ class TestTargetBigquery:
         self.run_query_tap_postgres = self.e2e.run_query_tap_postgres
         self.run_query_target_bigquery = self.e2e.run_query_target_bigquery
         self.mongodb_con = self.e2e.get_tap_mongodb_connection()
+
         self.e2e.remove_all_state_files()
         if self.e2e.env['TARGET_BIGQUERY']['is_configured']:
             self.e2e.setup_target_bigquery()
