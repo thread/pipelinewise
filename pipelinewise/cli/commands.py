@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from subprocess import PIPE, STDOUT, Popen
 from pathlib import Path
-from pathy import FluidPath
+from pathy import FluidPath, Pathy
 from typing import cast, Optional
 
 
@@ -441,6 +441,7 @@ def run_command(command: str, log_file: Optional[Path] = None, line_callback: ca
     if log_file is not None:
         LOGGER.info('Writing output into %s', log_file)
 
+        log_file = Pathy.fluid(log_file)
         # Create log dir if not exists
         log_file.parent.mkdir(parents=True, exist_ok=True)
 
