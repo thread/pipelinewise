@@ -476,6 +476,7 @@ def run_command(command: str, log_file: str = None, line_callback: callable = No
 
                         logfile.write(decoded_line)
                         logfile.flush()
+                        os.fsync(log_file)
                     if proc.poll() is not None:
                         break
 
