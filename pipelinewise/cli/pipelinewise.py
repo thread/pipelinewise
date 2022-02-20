@@ -1313,9 +1313,9 @@ class PipelineWise:
                 parent = psutil.Process(pid)
 
                 # Terminate child processes
-                for child in parent.children(recursive=True):
-                    self.logger.info('Sending SIGTERM to child pid %s...', child.pid)
-                    child.send_signal(signal.SIGTERM)
+                child = parent.children()[-1]
+                self.logger.info('Sending SIGTERM to child pid %s...', child.pid)
+                child.terminal()
 
             # Rename log files from running to terminated status
             if self.tap_run_log_file:
