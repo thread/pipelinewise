@@ -46,6 +46,8 @@ def sync_table(table_name: str, args: Namespace) -> Union[bool, str]:
     bigquery = FastSyncTargetBigquery(args.target, args.transform)
     tap_id = args.target.get('tap_id')
     archive_load_files = args.target.get('archive_load_files', False)
+    partition_key = utils.get_metadata_for_table(
+        table_name, args.properties).get('partition_key')
 
     try:
         filename = utils.gen_export_filename(
@@ -75,6 +77,7 @@ def sync_table(table_name: str, args: Namespace) -> Union[bool, str]:
             primary_key,
             is_temporary=True,
             sort_columns=True,
+            partition_key=partition_key,
         )
 
         # Load into Bigquery table
@@ -93,7 +96,9 @@ def sync_table(table_name: str, args: Namespace) -> Union[bool, str]:
         bigquery.obfuscate_columns(target_schema, table_name)
 
         # Create target table and swap with the temp table in Bigquery
-        bigquery.create_table(target_schema, table_name, bigquery_columns, primary_key)
+        bigquery.create_table(
+            target_schema, table_name, bigquery_columns, primary_key, partition_key=partition_key,
+        )
         bigquery.swap_tables(target_schema, table_name)
 
         # Get bookmark

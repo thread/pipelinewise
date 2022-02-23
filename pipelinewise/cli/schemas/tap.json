@@ -85,6 +85,9 @@
                 "LOG_BASED"
               ]
             },
+            "partition_key": {
+              "type": "string"
+            },
             "transformations": {
               "type": "array",
               "items": {
@@ -111,6 +114,9 @@
               ]
             },
             "replication_key": {
+              "type": "string"
+            },
+            "partition_key": {
               "type": "string"
             },
             "transformations": {
