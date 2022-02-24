@@ -325,7 +325,7 @@ class Config:
                             # Add replication_key only if replication_method is INCREMENTAL
                             'replication_key': table.get('replication_key')
                             if replication_method == 'INCREMENTAL' else None,
-                            'partition_key': table.get('partition_key'),
+                            'partition_by': table.get('partition_by'),
                         }
                     )
                 )

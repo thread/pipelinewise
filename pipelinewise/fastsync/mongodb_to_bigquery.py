@@ -51,8 +51,8 @@ def sync_table(table: str, args: Namespace) -> Union[bool, str]:
     tap_id = args.target.get('tap_id')
     archive_load_files = args.target.get('archive_load_files', False)
     dbname = args.tap.get('dbname')
-    partition_key = utils.get_metadata_for_table(
-            table, args.properties, dbname=dbname).get('partition_key')
+    partition_by = utils.get_metadata_for_table(
+            table, args.properties, dbname=dbname).get('partition-by')
 
     try:
         filename = 'pipelinewise_fastsync_{}_{}_{}.csv'.format(
@@ -102,7 +102,7 @@ def sync_table(table: str, args: Namespace) -> Union[bool, str]:
 
         # Create target table and swap with the temp table in Bigquery
         bigquery.create_table(
-            target_schema, table, bigquery_columns, primary_key, partition_key=partition_key
+            target_schema, table, bigquery_columns, primary_key, partition_by=partition_by
         )
         bigquery.swap_tables(target_schema, table)
 

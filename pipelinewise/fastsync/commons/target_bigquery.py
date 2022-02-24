@@ -31,6 +31,32 @@ def safe_name(name, quotes=True):
     return removed_bad_chars
 
 
+def get_partition_by_clause(partition_by: Dict) -> str:
+    """
+    Generate BigQuery specific PARTITION BY clause from dictionary.
+    """
+    field = partition_by['field'].lower()
+    data_type = partition_by['data_type']
+    granularity = partition_by.get('granularity', 'day')
+
+    if data_type == 'int64':
+        sub_clause = (
+            f'RANGE_BUCKET({field}, '
+            f'GENERATE_ARRAY({partition_by["range"]["start"]}, '
+            f'{partition_by["range"]["end"]}, {partition_by["range"]["interval"]}))'
+        )
+    elif data_type == 'date':
+        sub_clause = f'DATE({field})'
+        if granularity != 'day':
+            sub_clause = f'DATE_TRUNC({field}, {granularity})'
+    elif data_type == 'datetime':
+        sub_clause = f'DATETIME_TRUNC({field}, {granularity})'
+    elif data_type == 'timestamp':
+        sub_clause = f'TIMESTAMP_TRUNC({field}, {granularity})'
+
+    return f' PARTITION BY {sub_clause})'
+
+
 # pylint: disable=missing-function-docstring,no-self-use,too-many-arguments
 class FastSyncTargetBigquery:
     """
@@ -194,7 +220,7 @@ class FastSyncTargetBigquery:
         primary_key: Optional[List[str]],
         is_temporary: bool = False,
         sort_columns=False,
-        partition_key: Optional[str] = None,
+        partition_by: Optional[Dict] = None,
     ):
 
         table_dict = utils.tablename_to_dict(table_name)
@@ -233,12 +259,11 @@ class FastSyncTargetBigquery:
             f'CREATE OR REPLACE TABLE {target_schema}.{target_table} ('
             f'{",".join(columns)})'
         )
-        if partition_key:
-            partition_key = partition_key.lower()
-            sql = sql + f' PARTITION BY DATE({partition_key})'
+        if partition_by:
+            sql = f'{sql} {get_partition_by_clause(partition_by)}'
         if primary_key:
             primary_key = [c.lower() for c in primary_key]
-            sql = sql + f' CLUSTER BY {",".join(primary_key)}'
+            sql = f'{sql} CLUSTER BY {",".join(primary_key)}'
 
         self.query(sql)
 

@@ -728,11 +728,11 @@ class PipelineWise:
                         ]['metadata']['replication-key'] = tap_stream_sel[
                             'replication_key'
                         ]
-                    if 'partition_key' in tap_stream_sel:
+                    if 'partition_by' in tap_stream_sel:
                         schema['streams'][stream_idx]['metadata'][
                             stream_table_mdata_idx
-                        ]['metadata']['partition-key'] = tap_stream_sel[
-                            'partition_key'
+                        ]['metadata']['partition-by'] = tap_stream_sel[
+                            'partition_by'
                         ]
                 else:
                     self.logger.debug(

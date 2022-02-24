@@ -85,8 +85,8 @@
                 "LOG_BASED"
               ]
             },
-            "partition_key": {
-              "type": "string"
+            "partition_by": {
+              "$ref": "#/definitions/partition_by"
             },
             "transformations": {
               "type": "array",
@@ -116,8 +116,8 @@
             "replication_key": {
               "type": "string"
             },
-            "partition_key": {
-              "type": "string"
+            "partition_by": {
+              "$ref": "#/definitions/partition_by"
             },
             "transformations": {
               "type": "array",
@@ -327,6 +327,65 @@
               }
             }
           }
+        }
+      ]
+    },
+    "partition_by": {
+      "type": "object",
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "data_type": {
+          "enum": ["timestamp", "date", "datetime", "int64"]
+        },
+        "granularity":{
+          "anyOf": [
+            {
+              "properties": {
+                "data_type": { "const": "date" }
+              },
+              "granularity": ["day", "month", "year"]
+            },
+            {
+              "properties": {
+                "data_type": { "const": "datetime" }
+              },
+              "granularity": ["hour", "day", "month", "year"]
+            },
+            {
+              "properties": {
+                "data_type": { "const": "timestamp" }
+              },
+              "granularity": ["hour", "day", "month", "year"]
+            }
+          ]
+        },
+        "range": {
+          "type": "object",
+          "required": ["start", "end", "interval"],
+          "properties": {
+            "start": {
+              "type": "integer"
+            },
+            "end": {
+              "type": "integer"
+            },
+            "interval": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "anyOf": [
+        {
+          "properties": {
+            "data_type": { "const": "int64" }
+          },
+          "required": ["field", "data_type", "range"]
+        },
+        {
+          "required": ["field", "data_type"]
         }
       ]
     }
