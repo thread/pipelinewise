@@ -71,8 +71,6 @@ def sync_table(table: str, args: Namespace) -> Union[bool, str]:
     bigquery = FastSyncTargetBigquery(args.target, args.transform)
     tap_id = args.target.get('tap_id')
     archive_load_files = args.target.get('archive_load_files', False)
-    partition_by = utils.get_metadata_for_table(
-        table, args.properties).get('partition-by')
 
     try:
         filename = 'pipelinewise_fastsync_{}_{}.csv'.format(
@@ -119,7 +117,7 @@ def sync_table(table: str, args: Namespace) -> Union[bool, str]:
             bigquery_columns,
             primary_key,
             is_temporary=True,
-            partition_by=partition_by,
+            partition_by=bookmark.get('partition_by'),
         )
 
         # Load into Bigquery table
@@ -140,7 +138,12 @@ def sync_table(table: str, args: Namespace) -> Union[bool, str]:
 
         # Create target table and swap with the temp table in Bigquery
         bigquery.create_table(
-            target_schema, table, bigquery_columns, primary_key, partition_by=partition_by)
+            target_schema,
+            table,
+            bigquery_columns,
+            primary_key,
+            partition_by=bookmark.get('partition_by'),
+        )
         bigquery.swap_tables(target_schema, table)
 
         # Save bookmark to singer state file

@@ -158,7 +158,8 @@ def get_bookmark_for_table(table, properties, db_engine, dbname=None):
         bookmark = db_engine.fetch_current_incremental_key_pos(
             table, replication_key
         )
-
+    if 'partition-by' in table_meta:
+        bookmark['partition_by'] = table_meta['partition-by']
     return bookmark
 
 
