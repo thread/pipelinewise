@@ -74,10 +74,15 @@ class TestFastSyncTapPostgres(TestCase):
         # mock cursor with execute method
         cursor_mock = MagicMock().return_value
         cursor_mock.__enter__.return_value.execute.side_effect = execute_mock
+        cursor_mock.__enter__.return_value.fetchone.return_value = (
+            'pipelinewise_test_database_test_tap', '242FC/BA84A740', '00000009-0192A151-1', 'wal2json'
+        )
         type(cursor_mock.__enter__.return_value).rowcount = PropertyMock(return_value=0)
 
         # mock PG connection instance with ability to open cursor
         pg_con = Mock()
+        pg_con.__enter__ = lambda *_: pg_con
+        pg_con.__exit__ = lambda *_: None
         pg_con.cursor.return_value = cursor_mock
 
         self.postgres.primary_host_conn = pg_con
@@ -85,8 +90,10 @@ class TestFastSyncTapPostgres(TestCase):
         self.postgres.create_replication_slot()
         assert self.postgres.executed_queries_primary_host == [
             "SELECT * FROM pg_replication_slots WHERE slot_name = 'pipelinewise_test_database';",
-            "SELECT * FROM pg_create_logical_replication_slot('pipelinewise_test_database_test_tap', 'wal2json')",
         ]
+        cursor_mock.__enter__.return_value.create_replication_slot.assert_called_once_with(
+            'pipelinewise_test_database_test_tap', output_plugin='wal2json'
+        )
 
     def test_create_replication_slot_2(self):
         """
@@ -100,10 +107,15 @@ class TestFastSyncTapPostgres(TestCase):
         # mock cursor with execute method
         cursor_mock = MagicMock().return_value
         cursor_mock.__enter__.return_value.execute.side_effect = execute_mock
+        cursor_mock.__enter__.return_value.fetchone.return_value = (
+            'pipelinewise_test_database_test_tap', '242FC/BA84A740', '00000009-0192A151-1', 'wal2json'
+        )
         type(cursor_mock.__enter__.return_value).rowcount = PropertyMock(return_value=1)
 
         # mock PG connection instance with ability to open cursor
         pg_con = Mock()
+        pg_con.__enter__ = lambda *_: pg_con
+        pg_con.__exit__ = lambda *_: None
         pg_con.cursor.return_value = cursor_mock
 
         self.postgres.primary_host_conn = pg_con
@@ -111,8 +123,10 @@ class TestFastSyncTapPostgres(TestCase):
         self.postgres.create_replication_slot()
         assert self.postgres.executed_queries_primary_host == [
             "SELECT * FROM pg_replication_slots WHERE slot_name = 'pipelinewise_test_database';",
-            "SELECT * FROM pg_create_logical_replication_slot('pipelinewise_test_database', 'wal2json')",
         ]
+        cursor_mock.__enter__.return_value.create_replication_slot.assert_called_once_with(
+            'pipelinewise_test_database', output_plugin='wal2json'
+        )
 
     @patch('pipelinewise.fastsync.commons.tap_postgres.psycopg2.connect')
     def test_get_connection_to_primary(self, connect_mock):
@@ -250,6 +264,8 @@ class TestFastSyncTapPostgres(TestCase):
 
         # mock PG connection instance with ability to open cursor
         pg_con = Mock()
+        pg_con.__enter__ = lambda *_: pg_con
+        pg_con.__exit__ = lambda *_: None
         pg_con.cursor.return_value = cursor_mock
 
         connect_mock.return_value = pg_con
@@ -258,9 +274,10 @@ class TestFastSyncTapPostgres(TestCase):
 
         assert self.postgres.executed_queries_primary_host == [
             "SELECT * FROM pg_replication_slots WHERE slot_name = 'pipelinewise_my_db';",
-            'SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE '
-            "slot_name = 'pipelinewise_my_db';",
         ]
+        cursor_mock.__enter__.return_value.drop_replication_slot.assert_called_once_with(
+            'pipelinewise_my_db'
+        )
 
     @patch('pipelinewise.fastsync.commons.tap_postgres.psycopg2.connect')
     def test_drop_slot_v16(self, connect_mock):
@@ -291,6 +308,8 @@ class TestFastSyncTapPostgres(TestCase):
 
         # mock PG connection instance with ability to open cursor
         pg_con = Mock()
+        pg_con.__enter__ = lambda *_: pg_con
+        pg_con.__exit__ = lambda *_: None
         pg_con.cursor.return_value = cursor_mock
 
         connect_mock.return_value = pg_con
@@ -299,6 +318,7 @@ class TestFastSyncTapPostgres(TestCase):
 
         assert self.postgres.executed_queries_primary_host == [
             "SELECT * FROM pg_replication_slots WHERE slot_name = 'pipelinewise_my_db';",
-            'SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE '
-            "slot_name = 'pipelinewise_my_db_tap_test';",
         ]
+        cursor_mock.__enter__.return_value.drop_replication_slot.assert_called_once_with(
+            'pipelinewise_my_db_tap_test'
+        )
