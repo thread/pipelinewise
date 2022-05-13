@@ -87,3 +87,5 @@ setup(name='pipelinewise',
           ]
       },
       include_package_data=True)
+
+# Force container rebuild.
