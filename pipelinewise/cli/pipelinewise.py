@@ -1316,7 +1316,7 @@ class PipelineWise:
             self.logger.error(
                 'No pidfile found at %s. Tap does not seem to be running.', pidfile_path
             )
-            return
+            sys.exit(1)
 
         # Terminate child processes
         try:

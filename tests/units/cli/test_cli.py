@@ -624,8 +624,7 @@ tap_three  tap-mysql     target_two   target-s3-csv     True       not-configure
             time.sleep(5)
 
             # Send the stop_tap command
-            with pytest.raises(SystemExit):
-                pipelinewise.stop_tap()
+            pipelinewise.stop_tap()
 
         # Should not have any remaining Pipelinewise related linux process
         for proc in psutil.process_iter(['cmdline']):
