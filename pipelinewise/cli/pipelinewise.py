@@ -1293,25 +1293,12 @@ class PipelineWise:
         a SIGTERM to the process.
         """
         self.logger.info('Trying to stop tap gracefully...')
+
+        # Get PID from pidfile.
         pidfile_path = self.tap['files']['pidfile']
-
-        # Rename log files from running to terminated status
-        if self.tap_run_log_file:
-            tap_run_log_file_running = f'{self.tap_run_log_file}.running'
-            tap_run_log_file_terminated = f'{self.tap_run_log_file}.terminated'
-
-            try:
-                os.rename(tap_run_log_file_running, tap_run_log_file_terminated)
-            except FileNotFoundError:
-                self.logger.warning(
-                    'No logfile found at %s.', tap_run_log_file_running
-                )
-
-        # Get PID from pidfile and remove the file.
         try:
             with open(pidfile_path, encoding='utf-8') as pidf:
                 pid = int(pidf.read())
-            os.remove(pidfile_path)
         except FileNotFoundError:
             self.logger.error(
                 'No pidfile found at %s. Tap does not seem to be running.', pidfile_path
@@ -1332,13 +1319,27 @@ class PipelineWise:
                         child.wait(timeout=1)
                     except psutil.TimeoutExpired:
                         child.kill()
-
         except ProcessLookupError:
             self.logger.error(
                 'Pid %s not found. Is the tap running on this machine? '
                 'Stopping taps remotely is not supported.',
                 pid,
             )
+        finally:
+            # Remove PID file
+            os.remove(pidfile_path)
+
+            # Rename log files from running to terminated status
+            if self.tap_run_log_file:
+                tap_run_log_file_running = f'{self.tap_run_log_file}.running'
+                tap_run_log_file_terminated = f'{self.tap_run_log_file}.terminated'
+
+                try:
+                    os.rename(tap_run_log_file_running, tap_run_log_file_terminated)
+                except FileNotFoundError:
+                    self.logger.warning(
+                        'No logfile found at %s.', tap_run_log_file_running
+                    )
 
     # pylint: disable=too-many-locals
     def sync_tables(self):
