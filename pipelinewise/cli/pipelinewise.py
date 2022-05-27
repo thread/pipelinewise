@@ -1293,49 +1293,53 @@ class PipelineWise:
         a SIGTERM to the process.
         """
         self.logger.info('Trying to stop tap gracefully...')
+
+        # Get PID from pidfile.
         pidfile_path = self.tap['files']['pidfile']
         try:
             with open(pidfile_path, encoding='utf-8') as pidf:
                 pid = int(pidf.read())
-                pgid = os.getpgid(pid)
-                parent = psutil.Process(pid)
-
-                # Terminate all the processes in the current process' process group.
-                for child in parent.children(recursive=True):
-                    if os.getpgid(child.pid) == pgid:
-                        self.logger.info('Sending SIGTERM to child pid %s...', child.pid)
-                        child.terminate()
-                        try:
-                            child.wait(timeout=5)
-                        except psutil.TimeoutExpired:
-                            child.kill()
-
-        except ProcessLookupError:
-            self.logger.error(
-                'Pid %s not found. Is the tap running on this machine? '
-                'Stopping taps remotely is not supported.',
-                pid,
-            )
-            sys.exit(1)
-
         except FileNotFoundError:
             self.logger.error(
                 'No pidfile found at %s. Tap does not seem to be running.', pidfile_path
             )
             sys.exit(1)
 
-        # Remove pidfile.
-        os.remove(pidfile_path)
+        # Terminate child processes
+        try:
+            pgid = os.getpgid(pid)
+            parent = psutil.Process(pid)
 
-        # Rename log files from running to terminated status
-        if self.tap_run_log_file:
-            tap_run_log_file_running = f'{self.tap_run_log_file}.running'
-            tap_run_log_file_terminated = f'{self.tap_run_log_file}.terminated'
+            # Terminate all the processes in the current process' process group.
+            for child in parent.children(recursive=True):
+                if os.getpgid(child.pid) == pgid:
+                    self.logger.info('Sending SIGTERM to child pid %s...', child.pid)
+                    child.terminate()
+                    try:
+                        child.wait(timeout=1)
+                    except psutil.TimeoutExpired:
+                        child.kill()
+        except ProcessLookupError:
+            self.logger.error(
+                'Pid %s not found. Is the tap running on this machine? '
+                'Stopping taps remotely is not supported.',
+                pid,
+            )
+        finally:
+            # Remove PID file
+            os.remove(pidfile_path)
 
-            if os.path.isfile(tap_run_log_file_running):
-                os.rename(tap_run_log_file_running, tap_run_log_file_terminated)
+            # Rename log files from running to terminated status
+            if self.tap_run_log_file:
+                tap_run_log_file_running = f'{self.tap_run_log_file}.running'
+                tap_run_log_file_terminated = f'{self.tap_run_log_file}.terminated'
 
-        sys.exit(1)
+                try:
+                    os.rename(tap_run_log_file_running, tap_run_log_file_terminated)
+                except FileNotFoundError:
+                    self.logger.warning(
+                        'No logfile found at %s.', tap_run_log_file_running
+                    )
 
     # pylint: disable=too-many-locals
     def sync_tables(self):
