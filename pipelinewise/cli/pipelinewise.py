@@ -1092,7 +1092,7 @@ class PipelineWise:
             target=target,
             transform=transform,
             venv_dir=self.venv_dir,
-            temp_dir=self.get_temp_dir(),
+            temp_dir=self.temp_dir,
             table=self.args.table,
             column=self.args.column,
             start_value=self.args.start_value,
