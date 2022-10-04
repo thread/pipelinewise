@@ -17,7 +17,9 @@
         <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
         <script src="../_static/jquery.js"></script>
         <script src="../_static/underscore.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
         <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
@@ -33,7 +35,7 @@
             <a href="../index.html" class="icon icon-home"> PipelineWise
           </a>
               <div class="version">
-                0.43.1
+                0.48.5
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
@@ -69,6 +71,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../user_guide/logging.html">Logging</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../user_guide/alerts.html">Alerts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../user_guide/resync.html">Resync Tables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/partial_sync.html">Different cases of partial resync</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Connectors</span></p>
 <ul>
@@ -109,7 +112,7 @@
            <div itemprop="articleBody">
              
   <section id="running-pipelines">
-<span id="id1"></span><h1>Running Pipelines<a class="headerlink" href="#running-pipelines" title="Permalink to this headline"></a></h1>
+<span id="id1"></span><h1>Running Pipelines<a class="headerlink" href="#running-pipelines" title="Permalink to this heading"></a></h1>
 <p>First get a list of the available pipelines by running <code class="docutils literal notranslate"><span class="pre">pipelinewise</span> <span class="pre">status</span></code> command. If you followed the steps at
 <a class="reference internal" href="creating_pipelines.html#example-replication-mysql-to-snowflake"><span class="std std-ref">Example replication from MySQL to Snowflake</span></a> then you should see this output:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ pipelinewise status

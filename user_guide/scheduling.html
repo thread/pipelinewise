@@ -17,7 +17,9 @@
         <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
         <script src="../_static/jquery.js"></script>
         <script src="../_static/underscore.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
         <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
@@ -33,7 +35,7 @@
             <a href="../index.html" class="icon icon-home"> PipelineWise
           </a>
               <div class="version">
-                0.43.1
+                0.48.5
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
@@ -69,6 +71,7 @@
 <li class="toctree-l1"><a class="reference internal" href="logging.html">Logging</a></li>
 <li class="toctree-l1"><a class="reference internal" href="alerts.html">Alerts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="resync.html">Resync Tables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="partial_sync.html">Different cases of partial resync</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Connectors</span></p>
 <ul>
@@ -109,7 +112,7 @@
            <div itemprop="articleBody">
              
   <section id="scheduling">
-<span id="id1"></span><h1>Scheduling<a class="headerlink" href="#scheduling" title="Permalink to this headline"></a></h1>
+<span id="id1"></span><h1>Scheduling<a class="headerlink" href="#scheduling" title="Permalink to this heading"></a></h1>
 <p>Scheduling and running PipelineWise tasks automatically is not part of the PipelineWise
 package but any task scheduler that can run Unix CLI commands can trigger PipelineWise
 jobs to run. Both Single Server and <a class="reference internal" href="#multi-server-cluster"><span class="std std-ref">Multi-Server Cluster</span></a> installations are achievable.</p>
@@ -142,6 +145,8 @@ schedulers:</p>
 <ul class="simple">
 <li><p><a class="reference external" href="https://en.wikipedia.org/wiki/Cron/">Unix Cron</a> Unix Cron - This is the simplest option
 for a single server installation.</p></li>
+<li><p><a class="reference external" href="https://github.com/transferwise/cicada/">Cicada</a> Cicada Scheduler - A lightweight multi-server
+CRON manager</p></li>
 <li><p><a class="reference external" href="https://github.com/jhuckaby/Cronicle/">Cronicle</a> - Cronicle is a reasonably good and
 relatively simple tool to schedule PipelineWise jobs in both Single Server and Multi-Server
 cluster installations.</p></li>
@@ -150,7 +155,7 @@ schedule and monitor workflows.</p></li>
 </ul>
 </section>
 <section id="multi-server-cluster">
-<span id="id3"></span><h1>Multi-Server Cluster<a class="headerlink" href="#multi-server-cluster" title="Permalink to this headline"></a></h1>
+<span id="id3"></span><h1>Multi-Server Cluster<a class="headerlink" href="#multi-server-cluster" title="Permalink to this heading"></a></h1>
 <p>Running Multi-Server Cluster requires a <a class="reference external" href="https://en.wikipedia.org/wiki/Network_File_System">Network File System</a>
 that is accessible from every host in the PipelineWise cluster.
 (<a class="reference external" href="https://aws.amazon.com/efs/">Amazon EFS</a>, <a class="reference external" href="https://cloud.google.com/filestore/">Google FileStore</a> or similar)</p>
@@ -160,13 +165,6 @@ PipelineWise commands on multiple nodes that operate on the same project, then
 every node has to read/write into the same directory, doesn’t matter where the nodes are
 located. This is typically done by mounting <code class="docutils literal notranslate"><span class="pre">${HOME}/.pipelinewise</span></code> on every node to
 a shared directory on NFS/EFS.</p>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>There are plans to store <code class="docutils literal notranslate"><span class="pre">${HOME}/.pipelinewise</span></code> runtime configuration files
-optionally on different data stores, like S3, RDBMs or on document stores like
-Couchbase or MongoDB. Once it is implemented, Multi-Server Cluster installation
-will not require NFS/EFS.</p>
-</div>
 </section>
 
 

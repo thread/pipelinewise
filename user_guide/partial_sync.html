@@ -4,12 +4,12 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Metadata Columns &mdash; PipelineWise  documentation</title>
+  <title>Different cases of partial resync &mdash; PipelineWise  documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/custom.css" type="text/css" />
     <link rel="shortcut icon" href="../_static/pipelinewise.png"/>
-    <link rel="canonical" href="https://docs.ansible.com/ansible/latest/user_guide/metadata_columns.html"/>
+    <link rel="canonical" href="https://docs.ansible.com/ansible/latest/user_guide/partial_sync.html"/>
   <!--[if lt IE 9]>
     <script src="../_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -23,8 +23,8 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Schema Changes" href="schema_changes.html" />
-    <link rel="prev" title="Scheduling" href="scheduling.html" /> 
+    <link rel="next" title="Taps (Data Sources)" href="../connectors/taps.html" />
+    <link rel="prev" title="Resync Tables" href="resync.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -65,13 +65,13 @@
 <li class="toctree-l1"><a class="reference internal" href="cli.html">Command Line Interface</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scheduling.html">Scheduling</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scheduling.html#multi-server-cluster">Multi-Server Cluster</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Metadata Columns</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metadata_columns.html">Metadata Columns</a></li>
 <li class="toctree-l1"><a class="reference internal" href="schema_changes.html">Schema Changes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="transformations.html">Transformations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="logging.html">Logging</a></li>
 <li class="toctree-l1"><a class="reference internal" href="alerts.html">Alerts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="resync.html">Resync Tables</a></li>
-<li class="toctree-l1"><a class="reference internal" href="partial_sync.html">Different cases of partial resync</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Different cases of partial resync</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Connectors</span></p>
 <ul>
@@ -101,9 +101,9 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
-      <li>Metadata Columns</li>
+      <li>Different cases of partial resync</li>
       <li class="wy-breadcrumbs-aside">
-            <a href="../_sources/user_guide/metadata_columns.rst.txt" rel="nofollow"> View page source</a>
+            <a href="../_sources/user_guide/partial_sync.rst.txt" rel="nofollow"> View page source</a>
       </li>
   </ul>
   <hr/>
@@ -111,83 +111,50 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="metadata-columns">
-<span id="id1"></span><h1>Metadata Columns<a class="headerlink" href="#metadata-columns" title="Permalink to this heading"></a></h1>
-<p>Metadata columns add extra row level information about data ingestion in target connectors.
-(i.e. when a row was read in source, when it was inserted or deleted in snowflake etc.)</p>
-<p>Metadata columns are created automatically by adding extra columns to the tables with a
-column prefix <code class="docutils literal notranslate"><span class="pre">_SDC_</span></code>:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">_SDC_EXTRACTED_AT</span></code>: Timestamp when the record was extracted from the source</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">_SDC_BATCHED_AT</span></code>: Timestamp when the record was batched to load into target</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">_SDC_DELETED_AT</span></code>: Timestamp when the record delete event was received from source.</p></li>
-</ul>
-<p>For example if you replicate a table that has three columns in source <code class="docutils literal notranslate"><span class="pre">COLUMN_ONE</span></code>,
-<code class="docutils literal notranslate"><span class="pre">COLUMN_TWO</span></code> and <code class="docutils literal notranslate"><span class="pre">COLUMN_THREE</span></code> then typically you find <code class="docutils literal notranslate"><span class="pre">_SDC_</span></code> metadata columns
-at the end of the table:</p>
-<table class="docutils align-default">
-<colgroup>
-<col style="width: 14%" />
-<col style="width: 14%" />
-<col style="width: 16%" />
-<col style="width: 20%" />
-<col style="width: 18%" />
-<col style="width: 18%" />
-</colgroup>
-<tbody>
-<tr class="row-odd"><td><p><strong>COLUMN_ONE</strong></p></td>
-<td><p><strong>COLUMN_TWO</strong></p></td>
-<td><p><strong>COLUMN_THREE</strong></p></td>
-<td><p><strong>_SDC_EXTRACTED_AT</strong></p></td>
-<td><p><strong>_SDC_BATCHED_AT</strong></p></td>
-<td><p><strong>_SDC_DELETED_AT</strong></p></td>
-</tr>
-<tr class="row-even"><td><p>text</p></td>
-<td><p>text</p></td>
-<td><p>1</p></td>
-<td><p>2019-08-20 16:10:01</p></td>
-<td><p>2019-08-20 16:10:10</p></td>
-<td></td>
-</tr>
-<tr class="row-odd"><td><p>text</p></td>
-<td><p>text</p></td>
-<td><p>2</p></td>
-<td><p>2019-08-20 16:10:01</p></td>
-<td><p>2019-08-20 16:10:10</p></td>
-<td></td>
-</tr>
-<tr class="row-even"><td><p>text</p></td>
-<td><p>text</p></td>
-<td><p>3</p></td>
-<td><p>2019-08-20 17:15:12</p></td>
-<td><p>2019-08-20 17:15:25</p></td>
-<td></td>
-</tr>
-</tbody>
-</table>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>Optionally, you can turn off creating metadata columns by creating
-<code class="docutils literal notranslate"><span class="pre">add_metadata_columns:</span> <span class="pre">False</span></code> to the <a class="reference internal" href="../connectors/targets.html#targets-list"><span class="std std-ref">Targets (Destinations)</span></a> YAML config file.
-Please note, if adding metadata columns option is turned off then deleted rows
-in source do not get deleted in target.</p>
-<p>Please note that <strong>Hard Delete</strong> mode is enabled by default for every target connector,
-which means that every record that was deleted in source will be deleted in the replicated
-target database as well. Please also note that Only <a class="reference internal" href="../concept/replication_methods.html#log-based"><span class="std std-ref">Log Based</span></a> replication method
-detects delete row events.</p>
-<p>To turn off <strong>Hard Delete</strong> mode add <code class="docutils literal notranslate"><span class="pre">hard_delete:</span> <span class="pre">false</span></code> to the target <a class="reference internal" href="../connectors/targets.html#targets-list"><span class="std std-ref">Targets (Destinations)</span></a>
-YAML config file. In this case when a deleted row captured in source then
-<code class="docutils literal notranslate"><span class="pre">_SDC_DELETED_AT</span></code> column will only get flagged and not get deleted in the target.
-Please also note that Only <a class="reference internal" href="../concept/replication_methods.html#log-based"><span class="std std-ref">Log Based</span></a> replication method detects delete row events.</p>
-</div>
+  <section id="different-cases-of-partial-resync">
+<span id="partial-sync-cases"></span><h1>Different cases of partial resync<a class="headerlink" href="#different-cases-of-partial-resync" title="Permalink to this heading"></a></h1>
+<ol class="arabic simple">
+<li><p><strong>Normal</strong></p></li>
+</ol>
+<img alt="../_images/partial_sync_case_1.png" src="../_images/partial_sync_case_1.png" />
+<p>This is the normal case which all source columns exist in the target.
+after exporting data from the source into S3, a temp table will be created on Snowflake and then it will be merged
+with the target table.</p>
+<ol class="arabic simple" start="2">
+<li><p><strong>Some columns are deleted from the target</strong></p></li>
+</ol>
+<img alt="../_images/partial_sync_case_2.png" src="../_images/partial_sync_case_2.png" />
+<p><code class="docutils literal notranslate"><span class="pre">Col2</span></code> is deleted from the target. after merging the temp and target tables only rows 2 and 3 in the target will have
+value.</p>
+<ol class="arabic simple" start="3">
+<li><p><strong>Some columns are deleted from the source</strong></p></li>
+</ol>
+<img alt="../_images/partial_sync_case_3.png" src="../_images/partial_sync_case_3.png" />
+<p>In this example, <code class="docutils literal notranslate"><span class="pre">Col2</span></code> is removed from the source table and it causes the values for this column not be updated in
+the synced table and row <code class="docutils literal notranslate"><span class="pre">3</span></code> has <code class="docutils literal notranslate"><span class="pre">null</span></code> value.</p>
+<ol class="arabic simple" start="4">
+<li><p><strong>Hard delete is disabled (soft delete)</strong></p></li>
+</ol>
+<img alt="../_images/partial_sync_case_4.png" src="../_images/partial_sync_case_4.png" />
+<p>If <code class="docutils literal notranslate"><span class="pre">hard_delete</span></code> setting  is <code class="docutils literal notranslate"><span class="pre">false</span></code> the records which are deleted from the source, won’t be deleted from the target. they
+just will have a time stamp in meta column.</p>
+<ol class="arabic simple" start="5">
+<li><p><strong>Hard delete is enabled</strong></p></li>
+</ol>
+<img alt="../_images/partial_sync_case_5.png" src="../_images/partial_sync_case_5.png" />
+<p>If <code class="docutils literal notranslate"><span class="pre">hard_delete</span></code> setting  is <code class="docutils literal notranslate"><span class="pre">true</span></code> the records which are deleted from the source, will be deleted from the target.</p>
+<ol class="arabic simple" start="6">
+<li><p><strong>Combination of all cases</strong></p></li>
+</ol>
+<img alt="../_images/partial_sync_case_all.png" src="../_images/partial_sync_case_all.png" />
 </section>
 
 
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="scheduling.html" class="btn btn-neutral float-left" title="Scheduling" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="schema_changes.html" class="btn btn-neutral float-right" title="Schema Changes" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="resync.html" class="btn btn-neutral float-left" title="Resync Tables" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../connectors/taps.html" class="btn btn-neutral float-right" title="Taps (Data Sources)" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

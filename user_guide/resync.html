@@ -17,11 +17,13 @@
         <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
         <script src="../_static/jquery.js"></script>
         <script src="../_static/underscore.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
         <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Taps (Data Sources)" href="../connectors/taps.html" />
+    <link rel="next" title="Different cases of partial resync" href="partial_sync.html" />
     <link rel="prev" title="Alerts" href="alerts.html" /> 
 </head>
 
@@ -33,7 +35,7 @@
             <a href="../index.html" class="icon icon-home"> PipelineWise
           </a>
               <div class="version">
-                0.43.1
+                0.48.5
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
@@ -69,6 +71,7 @@
 <li class="toctree-l1"><a class="reference internal" href="logging.html">Logging</a></li>
 <li class="toctree-l1"><a class="reference internal" href="alerts.html">Alerts</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Resync Tables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="partial_sync.html">Different cases of partial resync</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Connectors</span></p>
 <ul>
@@ -109,10 +112,13 @@
            <div itemprop="articleBody">
              
   <section id="resync-tables">
-<span id="resync"></span><h1>Resync Tables<a class="headerlink" href="#resync-tables" title="Permalink to this headline"></a></h1>
+<span id="resync"></span><h1>Resync Tables<a class="headerlink" href="#resync-tables" title="Permalink to this heading"></a></h1>
 <p>Sometimes you will need to resync tables in ad-hoc bases. For example when
 binlog position deleted in MySQL or when a database migrated to another server
 and previous CDC bookmarks are not transferable, etc.</p>
+<ol class="arabic simple">
+<li><p><strong>Full resync</strong></p></li>
+</ol>
 <p>If you want to resync every table from a specific tap then use the <code class="docutils literal notranslate"><span class="pre">sync_tables</span></code>
 command and specify the tap and target ids:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ pipelinewise sync_tables --target &lt;target_id&gt; --tap &lt;tap_id&gt;
@@ -131,6 +137,21 @@ add the <code class="docutils literal notranslate"><span class="pre">--tables</s
 list of table names using the <code class="docutils literal notranslate"><span class="pre">&lt;schema_name&gt;.&lt;table_name&gt;</span></code> format. Schema and
 table names have to be the names in the source database.</p>
 </div>
+<ol class="arabic simple" start="2">
+<li><p><strong>Partial resync</strong></p></li>
+</ol>
+<p>If you want to partial resync a table from a specific tap then use the <code class="docutils literal notranslate"><span class="pre">partial_sync_table</span></code> command
+and specify the tap and target ids and table, column ,start_value and end_value(optional)</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ pipelinewise partial_sync_table --target &lt;target_id&gt; --tap &lt;tap_id&gt; --table schema.table --column column_name --start_value start_value_from_column --end_value end_value_from_column
+</pre></div>
+</div>
+<p><strong>note</strong> if there is no end_value, the internal state file will be updated with the replication value (gtid, wal, etc) that was captured at the start of the partial sync</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>The value of the <code class="docutils literal notranslate"><span class="pre">--table</span></code> argument needs to be in the <code class="docutils literal notranslate"><span class="pre">&lt;schema_name&gt;.&lt;table_name&gt;</span></code> format. Schema and
+table name have to be the names in the source database.</p>
+</div>
+<p>More description about different cases of partial resync can be found here <a class="reference internal" href="partial_sync.html#partial-sync-cases"><span class="std std-ref">Different cases of partial resync</span></a></p>
 </section>
 
 
@@ -138,7 +159,7 @@ table names have to be the names in the source database.</p>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="alerts.html" class="btn btn-neutral float-left" title="Alerts" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="../connectors/taps.html" class="btn btn-neutral float-right" title="Taps (Data Sources)" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="partial_sync.html" class="btn btn-neutral float-right" title="Different cases of partial resync" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>
