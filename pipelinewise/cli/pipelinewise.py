@@ -3,13 +3,14 @@ PipelineWise CLI - Pipelinewise class
 """
 import logging
 import os
+import pathlib
 import shutil
 import signal
 import sys
 import json
 import copy
 import psutil
-import pidfile
+import sherlock
 
 from datetime import datetime
 from time import time
@@ -80,6 +81,9 @@ class PipelineWise:
 
     def __init__(self, args, config_dir, venv_dir, profiling_dir=None, temp_dir=None):
 
+        # List of locks to release on exit.
+        self.locks: Dict[str, sherlock.lock.BaseLock] = {}
+
         self.profiling_mode = args.profiler
         self.profiling_dir = profiling_dir
         self.drop_pg_slot = False
@@ -119,6 +123,20 @@ class PipelineWise:
         # Catch SIGINT and SIGTERM to exit gracefully
         for sig in [signal.SIGINT, signal.SIGTERM]:
             signal.signal(sig, self.stop_tap)
+
+    def get_lock(self, target_id: str, tap_id: str) -> sherlock.lock.BaseLock:
+        """
+        Get a distributed lock for a given tap and cache it
+        """
+        key = f'{target_id}__{tap_id}'
+        if key not in self.locks:
+            self.locks[key] = sherlock.FileLock(
+                key,
+                client=pathlib.Path(self.temp_dir),
+                timeout=1,
+                expire=None,
+            )
+        return self.locks[key]
 
     def send_alert(
         self, message: str, level: str = BaseAlertHandler.ERROR, exc: Exception = None
@@ -939,19 +957,18 @@ class PipelineWise:
         }
 
         # Tap exists but configuration not completed
+        lock = self.get_lock(target_id, tap_id)
         if not os.path.isfile(connector_files['config']):
             status['currentStatus'] = 'not-configured'
 
-        # Tap exists and has log in running status
-        elif (
-            os.path.isdir(log_dir)
-            and len(utils.search_log_files(log_dir, patterns=['*.log.running'])) > 0
-        ):
-            status['currentStatus'] = 'running'
-
         # Configured and not running
-        else:
+        elif lock.acquire(blocking=False):
+            lock.release()
             status['currentStatus'] = 'ready'
+
+        # Tap exists and in running status
+        else:
+            status['currentStatus'] = 'running'
 
         # Get last run instance
         if os.path.isdir(log_dir):
@@ -1025,19 +1042,6 @@ class PipelineWise:
             profiling_mode=self.profiling_mode,
             profiling_dir=self.profiling_dir,
         )
-
-        # Do not run if another instance is already running
-        log_dir = os.path.dirname(self.tap_run_log_file)
-        if (
-            os.path.isdir(log_dir)
-            and len(utils.search_log_files(log_dir, patterns=['*.log.running'])) > 0
-        ):
-            self.logger.info(
-                'Failed to run. Another instance of the same tap is already running. '
-                'Log file detected in running status at %s',
-                log_dir,
-            )
-            sys.exit(1)
 
         start = None
         state = None
@@ -1131,19 +1135,6 @@ class PipelineWise:
             drop_pg_slot=self.drop_pg_slot,
         )
 
-        # Do not run if another instance is already running
-        log_dir = os.path.dirname(self.tap_run_log_file)
-        if (
-            os.path.isdir(log_dir)
-            and len(utils.search_log_files(log_dir, patterns=['*.log.running'])) > 0
-        ):
-            self.logger.info(
-                'Failed to run. Another instance of the same tap is already running. '
-                'Log file detected in running status at %s',
-                log_dir,
-            )
-            sys.exit(1)
-
         # Fastsync is running in subprocess.
         # Collect the formatted logs and log it in the main PipelineWise process as well
         # Logs are already formatted at this stage so not using logging functions to avoid double formatting.
@@ -1236,7 +1227,7 @@ class PipelineWise:
         utils.create_backup_of_the_file(tap_state)
         start_time = datetime.now()
         try:
-            with pidfile.PIDFile(self.tap['files']['pidfile']):
+            with self.get_lock(target_id, tap_id):
                 target_params = TargetParams(
                     target_id=target_id,
                     type=target_type,
@@ -1308,7 +1299,7 @@ class PipelineWise:
                         'No table available that needs to be sync by singer'
                     )
 
-        except pidfile.AlreadyRunningError:
+        except sherlock.LockTimeoutException:
             self.logger.error('Another instance of the tap is already running.')
             sys.exit(1)
         # Delete temp files if there is any
@@ -1332,24 +1323,17 @@ class PipelineWise:
         """
         Stop running tap
 
-        The command finds the tap specific pidfile that was created by run_tap command and sends
-        a SIGTERM to the process.
+        The command sends a SIGTERM to all child processes.
         """
         self.logger.info('Trying to stop tap gracefully...')
 
-        # Get PID from pidfile.
-        pidfile_path = self.tap['files']['pidfile']
-        try:
-            with open(pidfile_path, encoding='utf-8') as pidf:
-                pid = int(pidf.read())
-        except FileNotFoundError:
-            self.logger.error(
-                'No pidfile found at %s. Tap does not seem to be running.', pidfile_path
-            )
-            sys.exit(1)
-
         # Terminate child processes
         try:
+            if not self.get_lock(self.target['id'], self.tap['id']).locked():
+                # Tap isn't running.
+                sys.exit(1)
+
+            pid = os.getpid()
             pgid = os.getpgid(pid)
             parent = psutil.Process(pid)
 
@@ -1369,9 +1353,12 @@ class PipelineWise:
                 pid,
             )
         finally:
-            # Remove PID file
-            os.remove(pidfile_path)
-
+            for lock in self.locks.values():
+                if lock.locked():
+                    try:
+                        lock.release()
+                    except sherlock.LockException:
+                        self.logger.error('Failed to release lock: %s', lock)
             # Rename log files from running to terminated status
             if self.tap_run_log_file:
                 tap_run_log_file_running = f'{self.tap_run_log_file}.running'
@@ -1439,7 +1426,7 @@ class PipelineWise:
             current_time = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
 
             # sync_tables command always using fastsync
-            with pidfile.PIDFile(self.tap['files']['pidfile']):
+            with self.get_lock(target_id, tap_id):
                 self.tap_run_log_file = os.path.join(
                     log_dir, f'{target_id}-{tap_id}-{current_time}.fastsync.log'
                 )
@@ -1475,7 +1462,7 @@ class PipelineWise:
                     tap=tap_params, target=target_params, transform=transform_params
                 )
 
-        except pidfile.AlreadyRunningError:
+        except sherlock.LockTimeoutException:
             self.logger.error('Another instance of the tap is already running.')
             sys.exit(1)
         # Delete temp file if there is any
@@ -1712,7 +1699,7 @@ class PipelineWise:
             log_dir = self.get_tap_log_dir(target_id, tap_id)
             current_time = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
 
-            with pidfile.PIDFile(self.tap['files']['pidfile']):
+            with self.get_lock(target_id, tap_id):
                 self.tap_run_log_file = os.path.join(
                     log_dir, f'{target_id}-{tap_id}-{current_time}.partialsync.log'
                 )
@@ -1748,7 +1735,7 @@ class PipelineWise:
                     tap=tap_params, target=target_params, transform=transform_params,
                 )
 
-        except pidfile.AlreadyRunningError as exc:
+        except sherlock.LockTimeoutException as exc:
             self.logger.error('Another instance of the tap is already running.')
             raise SystemExit(1) from exc
         # Delete temp file if there is any
