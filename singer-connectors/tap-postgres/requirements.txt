@@ -1,1 +1,1 @@
-git+https://github.com/thread/pipelinewise-tap-postgres.git@62f85886301ab0fa92230aa2a27c93e04a5c31b0
+git+https://github.com/thread/pipelinewise-tap-postgres.git@ee2afc9a7f01372ef0cbdfefebc7be4f81c1b656

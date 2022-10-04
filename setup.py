@@ -7,7 +7,7 @@ with open('README.md') as f:
 
 setup(name='pipelinewise',
       python_requires='>=3.7,<3.10',
-      version='0.43.1',
+      version='0.48.5',
       description='PipelineWise',
       long_description=LONG_DESCRIPTION,
       long_description_content_type='text/markdown',
@@ -40,9 +40,10 @@ setup(name='pipelinewise',
           'tzlocal>=2.0,<4.1',
           'slackclient==2.9.3',
           'psutil==5.8.0',
-          'ujson==5.1.0',
+          'ujson==5.4.0',
           'dnspython==2.1.*',
           'boto3==1.21.*',
+          'chardet==4.0.0',
       ],
       extras_require={
           'test': [
@@ -52,7 +53,7 @@ setup(name='pipelinewise',
               'pytest-dependency==0.4.0',
               'pytest-cov==3.0.0',
               'python-dotenv==0.19.1',
-              'pylint==2.10.2',
+              'pylint==2.10.*',
               'unify==0.5'
           ]
       },
@@ -74,6 +75,8 @@ setup(name='pipelinewise',
               'mongodb-to-snowflake=pipelinewise.fastsync.mongodb_to_snowflake:main',
               'mongodb-to-postgres=pipelinewise.fastsync.mongodb_to_postgres:main',
               'mongodb-to-bigquery=pipelinewise.fastsync.mongodb_to_bigquery:main',
+              'partial-mysql-to-snowflake=pipelinewise.fastsync.partialsync.mysql_to_snowflake:main',
+              'partial-postgres-to-snowflake=pipelinewise.fastsync.partialsync.postgres_to_snowflake:main'
           ]
       },
       packages=find_packages(exclude=['tests*']),
