@@ -133,8 +133,8 @@ class PipelineWise:
         key = f'{target_id}__{tap_id}'
         if key not in self.locks:
             self.locks[key] = sherlock.FileLock(
-                key,
-                client=pathlib.Path(self.temp_dir),
+                'lockfile',
+                client=pathlib.Path(self.get_tap_dir(target_id, tap_id)),
                 timeout=1,
                 expire=DEFAULT_LOCK_EXPIRY,
             )
