@@ -67,6 +67,8 @@ PARTIAL_SYNC_PAIRS = {
 
 }
 
+DEFAULT_LOCK_EXPIRY = 30
+
 
 # pylint: disable=too-many-lines,too-many-instance-attributes,too-many-public-methods
 class PipelineWise:
@@ -134,7 +136,7 @@ class PipelineWise:
                 key,
                 client=pathlib.Path(self.temp_dir),
                 timeout=1,
-                expire=None,
+                expire=DEFAULT_LOCK_EXPIRY,
             )
         return self.locks[key]
 
@@ -1074,13 +1076,17 @@ class PipelineWise:
             sys.stdout.write(line)
             return update_state_file(line)
 
+        # We need to get a distributed lock to make sure that we're not running at the same time
+        # as another process.
+        lock = self.get_lock(target.target_id, tap.tap_id)
+
         # Run command with update_state_file as a callback to call for every stdout line
         if self.extra_log:
             commands.run_command(
-                command, self.tap_run_log_file, update_state_file_with_extra_log
+                command, lock, self.tap_run_log_file, update_state_file_with_extra_log
             )
         else:
-            commands.run_command(command, self.tap_run_log_file, update_state_file)
+            commands.run_command(command, lock, self.tap_run_log_file, update_state_file)
 
         # update the state file one last time to make sure it always has the last state message.
         if state is not None:
@@ -1107,14 +1113,18 @@ class PipelineWise:
             sys.stdout.write(line)
             return line
 
+        # We need to get a distributed lock to make sure that we're not running at the same time
+        # as another process.
+        lock = self.get_lock(target.target_id, tap.tap_id)
+
         if self.extra_log:
             # Run command and copy partialsync output to main logger
             commands.run_command(
-                command, self.tap_run_log_file, add_partialsync_output_to_main_logger
+                command, lock, self.tap_run_log_file, add_partialsync_output_to_main_logger
             )
         else:
             # Run command
-            commands.run_command(command, self.tap_run_log_file)
+            commands.run_command(command, lock, self.tap_run_log_file)
 
     def run_tap_fastsync(
         self, tap: TapParams, target: TargetParams, transform: TransformParams
@@ -1142,14 +1152,18 @@ class PipelineWise:
             sys.stdout.write(line)
             return line
 
+        # We need to get a distributed lock to make sure that we're not running at the same time
+        # as another process.
+        lock = self.get_lock(target.target_id, tap.tap_id)
+
         if self.extra_log:
             # Run command and copy fastsync output to main logger
             commands.run_command(
-                command, self.tap_run_log_file, add_fastsync_output_to_main_logger
+                command, lock, self.tap_run_log_file, add_fastsync_output_to_main_logger
             )
         else:
             # Run command
-            commands.run_command(command, self.tap_run_log_file)
+            commands.run_command(command, lock, self.tap_run_log_file)
 
     # pylint: disable=too-many-statements,too-many-locals
     def run_tap(self):
@@ -1227,77 +1241,76 @@ class PipelineWise:
         utils.create_backup_of_the_file(tap_state)
         start_time = datetime.now()
         try:
-            with self.get_lock(target_id, tap_id):
-                target_params = TargetParams(
-                    target_id=target_id,
-                    type=target_type,
-                    bin=self.target_bin,
-                    python_bin=self.target_python_bin,
-                    config=cons_target_config,
-                )
+            target_params = TargetParams(
+                target_id=target_id,
+                type=target_type,
+                bin=self.target_bin,
+                python_bin=self.target_python_bin,
+                config=cons_target_config,
+            )
 
-                transform_params = TransformParams(
-                    bin=self.transform_field_bin,
-                    python_bin=self.transform_field_python_bin,
-                    config=tap_transformation,
+            transform_params = TransformParams(
+                bin=self.transform_field_bin,
+                python_bin=self.transform_field_python_bin,
+                config=tap_transformation,
+                tap_id=tap_id,
+                target_id=target_id,
+            )
+
+            # Run fastsync for FULL_TABLE replication method
+            if len(fastsync_stream_ids) > 0:
+                self.logger.info(
+                    'Table(s) selected to sync by fastsync: %s', fastsync_stream_ids
+                )
+                self.tap_run_log_file = os.path.join(
+                    log_dir, f'{target_id}-{tap_id}-{current_time}.fastsync.log'
+                )
+                tap_params = TapParams(
                     tap_id=tap_id,
-                    target_id=target_id,
+                    type=tap_type,
+                    bin=self.tap_bin,
+                    python_bin=self.tap_python_bin,
+                    config=tap_config,
+                    properties=tap_properties_fastsync,
+                    state=tap_state,
                 )
 
-                # Run fastsync for FULL_TABLE replication method
-                if len(fastsync_stream_ids) > 0:
-                    self.logger.info(
-                        'Table(s) selected to sync by fastsync: %s', fastsync_stream_ids
-                    )
-                    self.tap_run_log_file = os.path.join(
-                        log_dir, f'{target_id}-{tap_id}-{current_time}.fastsync.log'
-                    )
-                    tap_params = TapParams(
-                        tap_id=tap_id,
-                        type=tap_type,
-                        bin=self.tap_bin,
-                        python_bin=self.tap_python_bin,
-                        config=tap_config,
-                        properties=tap_properties_fastsync,
-                        state=tap_state,
-                    )
+                self.run_tap_fastsync(
+                    tap=tap_params, target=target_params, transform=transform_params
+                )
+            else:
+                self.logger.info(
+                    'No table available that needs to be sync by fastsync'
+                )
 
-                    self.run_tap_fastsync(
-                        tap=tap_params, target=target_params, transform=transform_params
-                    )
-                else:
-                    self.logger.info(
-                        'No table available that needs to be sync by fastsync'
-                    )
+            # Run singer tap for INCREMENTAL and LOG_BASED replication methods
+            if len(singer_stream_ids) > 0:
+                self.logger.info(
+                    'Table(s) selected to sync by singer: %s', singer_stream_ids
+                )
+                self.tap_run_log_file = os.path.join(
+                    log_dir, f'{target_id}-{tap_id}-{current_time}.singer.log'
+                )
+                tap_params = TapParams(
+                    tap_id=tap_id,
+                    type=tap_type,
+                    bin=self.tap_bin,
+                    python_bin=self.tap_python_bin,
+                    config=tap_config,
+                    properties=tap_properties_singer,
+                    state=tap_state,
+                )
 
-                # Run singer tap for INCREMENTAL and LOG_BASED replication methods
-                if len(singer_stream_ids) > 0:
-                    self.logger.info(
-                        'Table(s) selected to sync by singer: %s', singer_stream_ids
-                    )
-                    self.tap_run_log_file = os.path.join(
-                        log_dir, f'{target_id}-{tap_id}-{current_time}.singer.log'
-                    )
-                    tap_params = TapParams(
-                        tap_id=tap_id,
-                        type=tap_type,
-                        bin=self.tap_bin,
-                        python_bin=self.tap_python_bin,
-                        config=tap_config,
-                        properties=tap_properties_singer,
-                        state=tap_state,
-                    )
-
-                    self.run_tap_singer(
-                        tap=tap_params,
-                        target=target_params,
-                        transform=transform_params,
-                        stream_buffer_size=stream_buffer_size,
-                    )
-                else:
-                    self.logger.info(
-                        'No table available that needs to be sync by singer'
-                    )
+                self.run_tap_singer(
+                    tap=tap_params,
+                    target=target_params,
+                    transform=transform_params,
+                    stream_buffer_size=stream_buffer_size,
+                )
+            else:
+                self.logger.info(
+                    'No table available that needs to be sync by singer'
+                )
 
         except sherlock.LockTimeoutException:
             self.logger.error('Another instance of the tap is already running.')
@@ -1327,12 +1340,22 @@ class PipelineWise:
         """
         self.logger.info('Trying to stop tap gracefully...')
 
+        # Rename log files from running to terminated status
+        if self.tap_run_log_file:
+            tap_run_log_file_running = f'{self.tap_run_log_file}.running'
+            tap_run_log_file_terminated = f'{self.tap_run_log_file}.terminated'
+
+            try:
+                os.rename(tap_run_log_file_running, tap_run_log_file_terminated)
+            except FileNotFoundError:
+                self.logger.warning(
+                    'No logfile found at %s.', tap_run_log_file_running
+                )
+            except Exception:
+                self.logger.warning('Failed to rename logfile at %s', tap_run_log_file_running)
+
         # Terminate child processes
         try:
-            if not self.get_lock(self.target['id'], self.tap['id']).locked():
-                # Tap isn't running.
-                sys.exit(1)
-
             pid = os.getpid()
             pgid = os.getpgid(pid)
             parent = psutil.Process(pid)
@@ -1353,23 +1376,25 @@ class PipelineWise:
                 pid,
             )
         finally:
-            for lock in self.locks.values():
-                if lock.locked():
-                    try:
-                        lock.release()
-                    except sherlock.LockException:
-                        self.logger.error('Failed to release lock: %s', lock)
-            # Rename log files from running to terminated status
-            if self.tap_run_log_file:
-                tap_run_log_file_running = f'{self.tap_run_log_file}.running'
-                tap_run_log_file_terminated = f'{self.tap_run_log_file}.terminated'
+            exit_code = 0
 
+            # Determine whether a tap was actually running.
+            target_id = getattr(self, 'target', {}).get('id')
+            tap_id = getattr(self, 'tap', {}).get('id')
+            if target_id and tap_id:
+                if not self.get_lock(target_id, tap_id).locked():
+                    # Tap isn't running.
+                    exit_code = 1
+
+            # Release any locks that we hold.
+            for lock in self.locks.values():
                 try:
-                    os.rename(tap_run_log_file_running, tap_run_log_file_terminated)
-                except FileNotFoundError:
-                    self.logger.warning(
-                        'No logfile found at %s.', tap_run_log_file_running
-                    )
+                    lock.release()
+                except sherlock.LockException:
+                    self.logger.error('Failed to release lock: %s', lock)
+
+            if exit_code > 0:
+                sys.exit(exit_code)
 
     # pylint: disable=too-many-locals
     def sync_tables(self):
@@ -1426,41 +1451,42 @@ class PipelineWise:
             current_time = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
 
             # sync_tables command always using fastsync
-            with self.get_lock(target_id, tap_id):
-                self.tap_run_log_file = os.path.join(
-                    log_dir, f'{target_id}-{tap_id}-{current_time}.fastsync.log'
-                )
+            self.tap_run_log_file = os.path.join(
+                log_dir, f'{target_id}-{tap_id}-{current_time}.fastsync.log'
+            )
 
-                # Create parameters as NamedTuples
-                tap_params = TapParams(
-                    tap_id=tap_id,
-                    type=tap_type,
-                    bin=self.tap_bin,
-                    python_bin=self.tap_python_bin,
-                    config=tap_config,
-                    properties=tap_properties,
-                    state=tap_state,
-                )
+            # Create parameters as NamedTuples
+            tap_params = TapParams(
+                tap_id=tap_id,
+                type=tap_type,
+                bin=self.tap_bin,
+                python_bin=self.tap_python_bin,
+                config=tap_config,
+                properties=tap_properties,
+                state=tap_state,
+            )
 
-                target_params = TargetParams(
-                    target_id=target_id,
-                    type=target_type,
-                    bin=self.target_bin,
-                    python_bin=self.target_python_bin,
-                    config=cons_target_config,
-                )
+            target_params = TargetParams(
+                target_id=target_id,
+                type=target_type,
+                bin=self.target_bin,
+                python_bin=self.target_python_bin,
+                config=cons_target_config,
+            )
 
-                transform_params = TransformParams(
-                    bin=self.transform_field_bin,
-                    config=tap_transformation,
-                    python_bin=self.transform_field_python_bin,
-                    tap_id=tap_id,
-                    target_id=target_id,
-                )
+            transform_params = TransformParams(
+                bin=self.transform_field_bin,
+                config=tap_transformation,
+                python_bin=self.transform_field_python_bin,
+                tap_id=tap_id,
+                target_id=target_id,
+            )
 
-                self.run_tap_fastsync(
-                    tap=tap_params, target=target_params, transform=transform_params
-                )
+            self.run_tap_fastsync(
+                tap=tap_params,
+                target=target_params,
+                transform=transform_params,
+            )
 
         except sherlock.LockTimeoutException:
             self.logger.error('Another instance of the tap is already running.')
@@ -1699,41 +1725,42 @@ class PipelineWise:
             log_dir = self.get_tap_log_dir(target_id, tap_id)
             current_time = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
 
-            with self.get_lock(target_id, tap_id):
-                self.tap_run_log_file = os.path.join(
-                    log_dir, f'{target_id}-{tap_id}-{current_time}.partialsync.log'
-                )
+            self.tap_run_log_file = os.path.join(
+                log_dir, f'{target_id}-{tap_id}-{current_time}.partialsync.log'
+            )
 
-                # Create parameters as NamedTuples
-                tap_params = TapParams(
-                    tap_id=tap_id,
-                    type=tap_type,
-                    bin=self.tap_bin,
-                    python_bin=self.tap_python_bin,
-                    config=tap_config,
-                    properties=tap_properties,
-                    state=tap_state,
-                )
+            # Create parameters as NamedTuples
+            tap_params = TapParams(
+                tap_id=tap_id,
+                type=tap_type,
+                bin=self.tap_bin,
+                python_bin=self.tap_python_bin,
+                config=tap_config,
+                properties=tap_properties,
+                state=tap_state,
+            )
 
-                target_params = TargetParams(
-                    target_id=target_id,
-                    type=target_type,
-                    bin=self.target_bin,
-                    python_bin=self.target_python_bin,
-                    config=cons_target_config,
-                )
+            target_params = TargetParams(
+                target_id=target_id,
+                type=target_type,
+                bin=self.target_bin,
+                python_bin=self.target_python_bin,
+                config=cons_target_config,
+            )
 
-                transform_params = TransformParams(
-                    bin=self.transform_field_bin,
-                    config=tap_transformation,
-                    python_bin=self.transform_field_python_bin,
-                    tap_id=tap_id,
-                    target_id=target_id,
-                )
+            transform_params = TransformParams(
+                bin=self.transform_field_bin,
+                config=tap_transformation,
+                python_bin=self.transform_field_python_bin,
+                tap_id=tap_id,
+                target_id=target_id,
+            )
 
-                self.run_tap_partialsync(
-                    tap=tap_params, target=target_params, transform=transform_params,
-                )
+            self.run_tap_partialsync(
+                tap=tap_params,
+                target=target_params,
+                transform=transform_params,
+            )
 
         except sherlock.LockTimeoutException as exc:
             self.logger.error('Another instance of the tap is already running.')
