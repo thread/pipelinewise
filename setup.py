@@ -43,7 +43,7 @@ setup(name='pipelinewise',
           'dnspython==2.1.*',
           'boto3==1.21.*',
           'chardet==4.0.0',
-          'sherlock@git+https://git@github.com/py-sherlock/sherlock@2eff8c19e1beb69c4725d0cda3bd1c58128c885d#egg=sherlock[filelock]',
+          'sherlock@git+https://git@github.com/py-sherlock/sherlock@8c8cf71e12d05f117242d769226905949a6a7830#egg=sherlock[filelock]',
       ],
       extras_require={
           'test': [
