@@ -959,18 +959,16 @@ class PipelineWise:
         }
 
         # Tap exists but configuration not completed
-        lock = self.get_lock(target_id, tap_id)
         if not os.path.isfile(connector_files['config']):
             status['currentStatus'] = 'not-configured'
 
-        # Configured and not running
-        elif lock.acquire(blocking=False):
-            lock.release()
-            status['currentStatus'] = 'ready'
-
         # Tap exists and in running status
-        else:
+        elif self.get_lock(target_id, tap_id).locked():
             status['currentStatus'] = 'running'
+
+        # Configured and not running
+        else:
+            status['currentStatus'] = 'ready'
 
         # Get last run instance
         if os.path.isdir(log_dir):
