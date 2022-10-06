@@ -43,7 +43,7 @@ setup(name='pipelinewise',
           'dnspython==2.1.*',
           'boto3==1.21.*',
           'chardet==4.0.0',
-          'sherlock==0.4.0',
+          'sherlock[filelock]==0.4.0',
       ],
       extras_require={
           'test': [
