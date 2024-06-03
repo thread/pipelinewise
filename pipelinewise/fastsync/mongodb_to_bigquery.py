@@ -50,9 +50,9 @@ def sync_table(table: str, args: Namespace) -> Union[bool, str]:
     bigquery = FastSyncTargetBigquery(args.target, args.transform)
     tap_id = args.target.get('tap_id')
     archive_load_files = args.target.get('archive_load_files', False)
+    dbname = args.tap.get('dbname')
 
     try:
-        dbname = args.tap.get('dbname')
         filename = 'pipelinewise_fastsync_{}_{}_{}.csv'.format(
             dbname, table, time.strftime('%Y%m%d-%H%M%S')
         )
@@ -81,7 +81,14 @@ def sync_table(table: str, args: Namespace) -> Union[bool, str]:
 
         # Creating temp table in Bigquery
         bigquery.create_schema(target_schema)
-        bigquery.create_table(target_schema, table, bigquery_columns, primary_key, is_temporary=True)
+        bigquery.create_table(
+            target_schema,
+            table,
+            bigquery_columns,
+            primary_key,
+            is_temporary=True,
+            partition_by=bookmark.get('partition_by'),
+        )
 
         # Load into Bigquery table
         bigquery.copy_to_table(
@@ -99,7 +106,13 @@ def sync_table(table: str, args: Namespace) -> Union[bool, str]:
         bigquery.obfuscate_columns(target_schema, table)
 
         # Create target table and swap with the temp table in Bigquery
-        bigquery.create_table(target_schema, table, bigquery_columns, primary_key)
+        bigquery.create_table(
+            target_schema,
+            table,
+            bigquery_columns,
+            primary_key,
+            partition_by=bookmark.get('partition_by'),
+        )
         bigquery.swap_tables(target_schema, table)
 
         # Save bookmark to singer state file

@@ -66,6 +66,9 @@ def sync_table(table_name: str, args: Namespace) -> Union[bool, str]:
         bigquery_columns = bigquery_types.get('columns', [])
         primary_key = bigquery_types.get('primary_key', [])
 
+        # Get bookmark
+        bookmark = utils.get_bookmark_for_table(table_name, args.properties, s3_csv)
+
         # Creating temp table in Bigquery
         bigquery.create_schema(target_schema)
         bigquery.create_table(
@@ -75,6 +78,7 @@ def sync_table(table_name: str, args: Namespace) -> Union[bool, str]:
             primary_key,
             is_temporary=True,
             sort_columns=True,
+            partition_by=bookmark.get('partition_by'),
         )
 
         # Load into Bigquery table
@@ -93,11 +97,14 @@ def sync_table(table_name: str, args: Namespace) -> Union[bool, str]:
         bigquery.obfuscate_columns(target_schema, table_name)
 
         # Create target table and swap with the temp table in Bigquery
-        bigquery.create_table(target_schema, table_name, bigquery_columns, primary_key)
+        bigquery.create_table(
+            target_schema,
+            table_name,
+            bigquery_columns,
+            primary_key,
+            partition_by=bookmark.get('partition_by'),
+        )
         bigquery.swap_tables(target_schema, table_name)
-
-        # Get bookmark
-        bookmark = utils.get_bookmark_for_table(table_name, args.properties, s3_csv)
 
         # Save bookmark to singer state file
         # Lock to ensure that only one process writes the same state file at a time
